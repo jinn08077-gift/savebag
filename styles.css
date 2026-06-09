@@ -240,6 +240,38 @@ svg {
   text-align: center;
 }
 
+.category-add-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.category-add-form input {
+  min-height: 40px;
+  padding: 0 11px;
+  font-size: 13px;
+}
+
+.category-add-button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.category-add-button:hover {
+  background: var(--panel-soft);
+}
+
 .side-actions {
   margin-top: auto;
   display: grid;
@@ -466,15 +498,6 @@ label {
   line-height: 1.58;
 }
 
-.result-note {
-  padding: 9px 10px;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--muted) !important;
-  font-size: 13px;
-}
-
 .overview-panel {
   padding: 16px;
 }
@@ -556,38 +579,20 @@ label {
   font-size: 12px;
 }
 
-.note-field {
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  background: var(--surface);
-}
-
-.note-field > span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 740;
-}
-
-.note-field textarea {
-  min-height: 78px;
-  padding: 12px;
-  border-color: var(--line-soft);
-  background: #fff;
-  font-size: 14px;
-}
-
 .tag-editor {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  background: var(--surface);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
 }
 
 .tag-editor-head {
+  flex: 0 0 auto;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
   color: var(--muted);
   font-size: 12px;
   font-weight: 740;
@@ -596,7 +601,10 @@ label {
 .editable-tags {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+  min-width: 0;
+  flex: 1;
 }
 
 .tag-chip {
@@ -609,6 +617,12 @@ label {
   background: #fff;
 }
 
+.tag-chip:hover,
+.tag-chip:focus-within {
+  border-color: #d1d8d1;
+  background: var(--panel-soft);
+}
+
 .tag-search,
 .tag-remove {
   min-height: 28px;
@@ -618,7 +632,7 @@ label {
 }
 
 .tag-search {
-  padding: 0 8px 0 10px;
+  padding: 0 11px;
   font-size: 12px;
   font-weight: 740;
 }
@@ -626,8 +640,22 @@ label {
 .tag-remove {
   display: grid;
   place-items: center;
+  width: 0;
+  padding: 0;
+  border-left: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    width 140ms ease,
+    opacity 140ms ease;
+}
+
+.tag-chip:hover .tag-remove,
+.tag-chip:focus-within .tag-remove {
   width: 28px;
   border-left: 1px solid var(--line-soft);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .tag-remove:hover,
@@ -646,31 +674,57 @@ label {
 }
 
 .tag-add-form {
+  display: none;
+  grid-template-columns: minmax(86px, 132px) auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.tag-editor.is-adding .tag-add-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+}
+
+.tag-editor.is-adding .tag-add-toggle {
+  display: none;
 }
 
 .tag-add-form input {
-  min-height: 38px;
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 13px;
 }
 
-.tag-add-button {
-  min-height: 38px;
+.tag-add-toggle,
+.tag-add-button,
+.tag-cancel-button {
+  min-height: 30px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  gap: 6px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0 12px;
+  border-radius: 999px;
+  padding: 0 10px;
   background: #fff;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 740;
 }
 
-.tag-add-button:hover {
+.tag-add-button,
+.tag-cancel-button {
+  padding-inline: 9px;
+}
+
+.tag-add-toggle:hover,
+.tag-add-button:hover,
+.tag-cancel-button:hover {
   background: var(--panel-soft);
+}
+
+.tag-add-toggle .ui-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .pill,
@@ -834,7 +888,7 @@ menu {
 
   .view-nav,
   .category-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .workspace {
@@ -869,7 +923,7 @@ menu {
   }
 
   .view-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .category-nav {
@@ -887,6 +941,10 @@ menu {
 
   .category-button {
     min-width: 0;
+  }
+
+  .category-add-form {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .side-actions {

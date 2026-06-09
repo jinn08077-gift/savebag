@@ -1,6 +1,7 @@
 const STORAGE_KEY = "shicang.items.v1";
+const CATEGORY_STORAGE_KEY = "shicang.customCategories.v1";
 
-const categories = [
+const baseCategories = [
   { name: "全部收藏", color: "#202426" },
   { name: "摄影待拍", color: "#2563a6" },
   { name: "学习任务", color: "#0f766e" },
@@ -10,6 +11,8 @@ const categories = [
   { name: "生活清单", color: "#397449" },
   { name: "待整理", color: "#687174" },
 ];
+
+let customCategories = loadCustomCategories();
 
 const categoryRules = [
   {
@@ -115,7 +118,7 @@ const seedItems = [
     tags: ["小红书", "拍照", "构图"],
     userNote: "",
     analysisStatus: "正文不足",
-    analysisSource: "备注文字",
+    analysisSource: "补充文字",
     sourceExcerpt: "周末上海街区拍照机位，光影和构图可以学",
     createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
   },
@@ -132,7 +135,7 @@ const seedItems = [
     tags: ["抖音", "剪辑", "短视频"],
     userNote: "",
     analysisStatus: "正文不足",
-    analysisSource: "备注文字",
+    analysisSource: "补充文字",
     sourceExcerpt: "剪辑开头节奏案例，之后做短视频可以拆",
     createdAt: new Date(Date.now() - 86400000).toISOString(),
   },
@@ -145,10 +148,11 @@ let draftItem = null;
 
 const els = {
   homeViewButton: document.querySelector("#homeViewButton"),
-  collectionViewButton: document.querySelector("#collectionViewButton"),
   homeView: document.querySelector("#homeView"),
   collectionsView: document.querySelector("#collectionsView"),
   categoryNav: document.querySelector("#categoryNav"),
+  categoryAddForm: document.querySelector("#categoryAddForm"),
+  categoryNameInput: document.querySelector("#categoryNameInput"),
   categoryInput: document.querySelector("#categoryInput"),
   statusInput: document.querySelector("#statusInput"),
   revisitInput: document.querySelector("#revisitInput"),
@@ -177,17 +181,12 @@ const els = {
 init();
 
 function init() {
-  renderCategoryOptions();
   render();
   bindEvents();
 }
 
 function bindEvents() {
   els.homeViewButton.addEventListener("click", () => setActiveView("home"));
-  els.collectionViewButton.addEventListener("click", () => {
-    activeCategory = "全部收藏";
-    setActiveView("collections");
-  });
 
   els.captureForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -238,6 +237,11 @@ function bindEvents() {
     }
   });
 
+  els.categoryAddForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    addCustomCategory(els.categoryNameInput.value);
+  });
+
   [els.searchInput, els.categoryFilter, els.statusFilter, els.revisitFilter].forEach((node) => {
     node.addEventListener("input", renderSearchResults);
     node.addEventListener("change", renderSearchResults);
@@ -245,6 +249,13 @@ function bindEvents() {
 }
 
 function renderCategoryOptions() {
+  const selectedCaptureCategory = els.categoryInput.value;
+  const selectedFilterCategory = els.categoryFilter.value;
+  const categories = getCategories();
+
+  els.categoryInput.innerHTML = `<option value="">自动</option>`;
+  els.categoryFilter.innerHTML = "";
+
   categories
     .filter((category) => category.name !== "全部收藏")
     .forEach((category) => {
@@ -260,9 +271,17 @@ function renderCategoryOptions() {
     filterOption.textContent = category.name;
     els.categoryFilter.append(filterOption);
   });
+
+  if ([...els.categoryInput.options].some((option) => option.value === selectedCaptureCategory)) {
+    els.categoryInput.value = selectedCaptureCategory;
+  }
+  if ([...els.categoryFilter.options].some((option) => option.value === selectedFilterCategory)) {
+    els.categoryFilter.value = selectedFilterCategory;
+  }
 }
 
 function render() {
+  renderCategoryOptions();
   renderView();
   renderCategories();
   renderStats();
@@ -274,11 +293,11 @@ function renderView() {
   els.homeView.classList.toggle("active", activeView === "home");
   els.collectionsView.classList.toggle("active", activeView === "collections");
   els.homeViewButton.classList.toggle("active", activeView === "home");
-  els.collectionViewButton.classList.toggle("active", activeView === "collections");
 }
 
 function renderCategories() {
   els.categoryNav.innerHTML = "";
+  const categories = getCategories();
   const counts = categories.reduce((acc, category) => {
     acc[category.name] =
       category.name === "全部收藏"
@@ -345,7 +364,6 @@ function renderSearchResults() {
             <span>${escapeHtml(item.analysisSource || "本地整理")}</span>
           </div>
           <h3>${escapeHtml(item.title)}</h3>
-          ${item.userNote ? `<p class="result-note">备注：${escapeHtml(shorten(item.userNote, 90))}</p>` : ""}
           <div class="tag-list">
             ${item.tags.map((tag) => `<button class="tag" type="button">${escapeHtml(tag)}</button>`).join("")}
           </div>
@@ -392,10 +410,6 @@ function renderItems() {
       updateItem(item.id, { progress, status });
     });
 
-    card.querySelector(".note-input").addEventListener("input", (event) => {
-      saveItemNote(item.id, event.target.value);
-    });
-
     card.querySelector(".tag-add-form").addEventListener("submit", (event) => {
       event.preventDefault();
       const input = event.currentTarget.querySelector(".tag-input");
@@ -404,10 +418,26 @@ function renderItems() {
       addItemTag(item.id, tag);
     });
 
-    card.querySelectorAll(".tag-remove").forEach((button) => {
-      button.addEventListener("click", () => {
-        removeItemTag(item.id, button.dataset.tag);
-      });
+    const tagEditor = card.querySelector(".tag-editor");
+    const tagInput = tagEditor.querySelector(".tag-input");
+    tagEditor.querySelector(".tag-add-toggle").addEventListener("click", () => {
+      tagEditor.classList.add("is-adding");
+      tagInput.focus();
+    });
+    tagEditor.querySelector(".tag-cancel-button").addEventListener("click", () => {
+      tagInput.value = "";
+      tagEditor.classList.remove("is-adding");
+    });
+    tagInput.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        tagInput.value = "";
+        tagEditor.classList.remove("is-adding");
+      }
+    });
+
+    card.querySelectorAll(".tag-chip").forEach((chip) => {
+      bindTagDeleteGestures(chip, item.id);
     });
 
     const reanalyzeButton = card.querySelector(".reanalyze-button");
@@ -472,11 +502,6 @@ function itemCardTemplate(item) {
       </div>
     </div>
 
-    <label class="note-field">
-      <span>备注</span>
-      <textarea class="note-input" rows="3" autocomplete="off" placeholder="写下你自己的判断、待办或打卡提醒">${escapeHtml(item.userNote || "")}</textarea>
-    </label>
-
     ${tagEditorTemplate(item.tags)}
 
     <div class="status-grid">
@@ -509,7 +534,7 @@ function tagEditorTemplate(tags = []) {
     ? normalizedTags
         .map(
           (tag) => `
-            <span class="tag-chip">
+            <span class="tag-chip" data-tag="${escapeAttr(tag)}" title="右键或长按删除标签">
               <button class="tag-search" type="button" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}</button>
               <button class="tag-remove" type="button" data-tag="${escapeAttr(tag)}" aria-label="删除标签 ${escapeAttr(tag)}">
                 ${iconMarkup("x")}
@@ -523,16 +548,59 @@ function tagEditorTemplate(tags = []) {
   return `
     <div class="tag-editor">
       <div class="tag-editor-head">标签</div>
-      <div class="editable-tags">${tagChips}</div>
-      <form class="tag-add-form">
-        <input class="tag-input" type="text" autocomplete="off" placeholder="新增标签" />
-        <button class="tag-add-button" type="submit">
+      <div class="editable-tags">
+        ${tagChips}
+        <button class="tag-add-toggle" type="button">
           ${iconMarkup("plus")}
-          <span>添加</span>
+          <span>添加标签</span>
         </button>
-      </form>
+        <form class="tag-add-form">
+          <input class="tag-input" type="text" autocomplete="off" placeholder="新增标签" />
+          <button class="tag-add-button" type="submit">
+            <span>确认</span>
+          </button>
+          <button class="tag-cancel-button" type="button">取消</button>
+        </form>
+      </div>
     </div>
   `;
+}
+
+function bindTagDeleteGestures(chip, itemId) {
+  let longPressTimer = null;
+  let longPressTriggered = false;
+  const tag = chip.dataset.tag;
+  const removeButton = chip.querySelector(".tag-remove");
+
+  removeButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    removeItemTag(itemId, tag);
+  });
+
+  chip.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    removeItemTag(itemId, tag);
+  });
+
+  chip.addEventListener("touchstart", () => {
+    longPressTriggered = false;
+    longPressTimer = window.setTimeout(() => {
+      longPressTriggered = true;
+      removeItemTag(itemId, tag);
+    }, 620);
+  }, { passive: true });
+
+  ["touchend", "touchcancel", "touchmove"].forEach((eventName) => {
+    chip.addEventListener(eventName, (event) => {
+      if (longPressTimer) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      if (longPressTriggered) {
+        event.preventDefault();
+      }
+    }, { passive: false });
+  });
 }
 
 function renderDraft(item) {
@@ -579,7 +647,6 @@ function getSearchFilteredItems() {
         item.platform,
         item.analysisSource,
         item.sourceExcerpt,
-        item.userNote,
         item.tags.join(" "),
         item.raw,
       ]
@@ -697,7 +764,7 @@ function mergeRemoteAnalysis(local, remote) {
     return {
       ...local,
       analysisStatus: local.note ? "正文不足" : "解析受限",
-      analysisSource: local.note ? "备注文字" : "链接元信息",
+      analysisSource: local.note ? "补充文字" : "链接元信息",
       remoteMessage: remote?.reason || "没有读到正文",
     };
   }
@@ -726,7 +793,7 @@ function mergeRemoteAnalysis(local, remote) {
     contentText: combinedText || local.note,
     textForRules,
     analysisStatus: hasUsefulContent ? "已解析" : hasMetaDescription ? "正文不足" : "解析受限",
-    analysisSource: hasUsefulContent ? "网页正文" : hasMetaDescription ? "网页元信息" : local.note ? "备注文字" : "链接元信息",
+    analysisSource: hasUsefulContent ? "网页正文" : hasMetaDescription ? "网页元信息" : local.note ? "补充文字" : "链接元信息",
     sourceExcerpt: shorten(combinedText || description || local.note || remote.title || "", 160),
     remoteMessage: hasUsefulContent ? "" : "没有读到足够正文，可能需要登录、跳转或平台限制",
   };
@@ -838,11 +905,6 @@ function updateItem(id, patch) {
   render();
 }
 
-function saveItemNote(id, userNote) {
-  items = items.map((item) => (item.id === id ? { ...item, userNote } : item));
-  saveItems();
-}
-
 function addItemTag(id, tag) {
   const normalizedTag = normalizeTag(tag);
   if (!normalizedTag) return;
@@ -900,7 +962,7 @@ function loadItems() {
 function migrateItem(item) {
   if (!item || typeof item !== "object") return null;
   const { summary, ...rest } = item;
-  const allowed = new Set(categories.map((category) => category.name));
+  const allowed = new Set(getCategories().map((category) => category.name));
   const category = rest.category === "好句观点" ? "内容灵感" : rest.category;
   return {
     ...rest,
@@ -915,6 +977,66 @@ function migrateItem(item) {
 
 function saveItems() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+}
+
+function getCategories() {
+  const customCategoryItems = customCategories.map((name) => ({
+    name,
+    color: "#687174",
+    custom: true,
+  }));
+  return [...baseCategories, ...customCategoryItems];
+}
+
+function addCustomCategory(rawName) {
+  const name = normalizeCategoryName(rawName);
+  if (!name) {
+    els.categoryNameInput.focus();
+    return;
+  }
+
+  const existingCategory = getCategories().find((category) => category.name.toLowerCase() === name.toLowerCase());
+  if (existingCategory) {
+    els.categoryNameInput.value = "";
+    activeCategory = existingCategory.name;
+    setActiveView("collections");
+    return;
+  }
+
+  customCategories = [...customCategories, name];
+  saveCustomCategories();
+  els.categoryNameInput.value = "";
+  activeCategory = name;
+  setActiveView("collections");
+}
+
+function loadCustomCategories() {
+  const saved = localStorage.getItem(CATEGORY_STORAGE_KEY);
+  if (!saved) return [];
+  try {
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? normalizeCustomCategories(parsed) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomCategories() {
+  localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(customCategories));
+}
+
+function normalizeCustomCategories(values) {
+  const baseNames = new Set(baseCategories.map((category) => category.name.toLowerCase()));
+  const seen = new Set();
+  return values
+    .map(normalizeCategoryName)
+    .filter(Boolean)
+    .filter((name) => {
+      const key = name.toLowerCase();
+      if (baseNames.has(key) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 function exportItems() {
@@ -951,7 +1073,7 @@ function categoryIcon(category) {
     生活清单: "checklist",
     待整理: "inbox",
   };
-  return icons[category] || "inbox";
+  return icons[category] || "folder";
 }
 
 function iconMarkup(name, className = "ui-icon") {
@@ -964,6 +1086,7 @@ function iconMarkup(name, className = "ui-icon") {
     spark: '<path d="M12 3v4" /><path d="M12 17v4" /><path d="M3 12h4" /><path d="M17 12h4" /><path d="m6.5 6.5 2.8 2.8" /><path d="m14.7 14.7 2.8 2.8" /><path d="m17.5 6.5-2.8 2.8" /><path d="m9.3 14.7-2.8 2.8" />',
     checklist: '<path d="m4 7 2 2 3-4" /><path d="M11 7h9" /><path d="m4 15 2 2 3-4" /><path d="M11 15h9" />',
     inbox: '<path d="M4 4h16v16H4z" /><path d="M4 14h4l2 3h4l2-3h4" />',
+    folder: '<path d="M3 6h6l2 2h10v10.5A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5z" /><path d="M3 9h18" />',
     external: '<path d="M14 4h6v6" /><path d="m10 14 10-10" /><path d="M20 14v5H5V4h5" />',
     refresh: '<path d="M20 6v5h-5" /><path d="M4 18v-5h5" /><path d="M18 11a6.5 6.5 0 0 0-11-4.5L4 9" /><path d="M6 13a6.5 6.5 0 0 0 11 4.5l3-2.5" />',
     trash: '<path d="M4 7h16" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M6 7l1 14h10l1-14" /><path d="M9 7V4h6v3" />',
@@ -991,6 +1114,12 @@ function normalizeTag(tag) {
     .replace(/^#+/, "")
     .replace(/[，,、]+/g, "")
     .slice(0, 16);
+}
+
+function normalizeCategoryName(value) {
+  return normalizeText(value)
+    .replace(/[，,、/\\]+/g, "")
+    .slice(0, 12);
 }
 
 function normalizeText(value) {

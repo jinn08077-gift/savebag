@@ -29,17 +29,20 @@
             </span>
             <span>Home</span>
           </button>
-          <button class="view-button" id="collectionViewButton" type="button">
-            <span class="ui-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M5 7h14" /><path d="M5 7l1.2 13h11.6L19 7" /><path d="M8 7V5h8v2" /><path d="M9.5 12h5" /></svg>
-            </span>
-            <span>所有收藏</span>
-          </button>
         </nav>
 
         <div class="category-section">
           <div class="side-label">收藏板块</div>
           <nav class="category-nav" id="categoryNav" aria-label="收藏板块"></nav>
+          <form class="category-add-form" id="categoryAddForm">
+            <input id="categoryNameInput" type="text" autocomplete="off" maxlength="12" placeholder="新增分类" />
+            <button class="category-add-button" type="submit" aria-label="新增分类">
+              <span class="ui-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
+              </span>
+              <span>新增分类</span>
+            </button>
+          </form>
         </div>
 
         <div class="side-actions">
@@ -134,7 +137,7 @@
             <div class="search-row">
               <label class="search-box">
                 检索
-                <input id="searchInput" type="search" autocomplete="off" placeholder="标题、标签、来源、备注" />
+                <input id="searchInput" type="search" autocomplete="off" placeholder="标题、标签、来源" />
               </label>
               <label>
                 板块
