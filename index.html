@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Saved baggg</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M6.5 8.5h11l-.8 10.2a2 2 0 0 1-2 1.8H9.3a2 2 0 0 1-2-1.8L6.5 8.5Z" />
+              <path d="M9 8.5V7a3 3 0 0 1 6 0v1.5" />
+              <path d="M10 13h4" />
+            </svg>
+          </div>
+          <div>
+            <h1>Saved baggg</h1>
+          </div>
+        </div>
+
+        <nav class="view-nav" aria-label="页面">
+          <button class="view-button active" id="homeViewButton" type="button">
+            <span class="ui-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></svg>
+            </span>
+            <span>Home</span>
+          </button>
+          <button class="view-button" id="collectionViewButton" type="button">
+            <span class="ui-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M5 7h14" /><path d="M5 7l1.2 13h11.6L19 7" /><path d="M8 7V5h8v2" /><path d="M9.5 12h5" /></svg>
+            </span>
+            <span>所有收藏</span>
+          </button>
+        </nav>
+
+        <div class="category-section">
+          <div class="side-label">收藏板块</div>
+          <nav class="category-nav" id="categoryNav" aria-label="收藏板块"></nav>
+        </div>
+
+        <div class="side-actions">
+          <button class="ghost-button" id="exportButton" type="button">
+            <span class="ui-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>
+            </span>
+            <span>导出数据</span>
+          </button>
+          <button class="ghost-button danger" id="resetButton" type="button">
+            <span class="ui-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 7h16" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M6 7l1 14h10l1-14" /><path d="M9 7V4h6v3" /></svg>
+            </span>
+            <span>清空示例</span>
+          </button>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <div class="view-panel active" id="homeView">
+          <section class="capture-panel" aria-label="新收藏">
+            <div class="capture-head">
+              <div>
+                <h2>新收藏</h2>
+                <p id="analysisMode">链接正文解析 + 本地归类</p>
+              </div>
+              <button class="secondary-button" id="pasteButton" type="button">
+                <span class="ui-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M9 5h6" /><path d="M9 3h6v4H9z" /><path d="M7 5H5v16h14V5h-2" /></svg>
+                </span>
+                <span>读取剪贴板</span>
+              </button>
+            </div>
+
+            <form id="captureForm" class="capture-form">
+              <textarea
+                id="sourceInput"
+                name="sourceInput"
+                rows="5"
+                autocomplete="off"
+                placeholder="粘贴一个链接；如果平台限制读取，也可以在链接后补充原文或截图识别文字"
+              ></textarea>
+
+              <div class="form-grid">
+                <label>
+                  板块
+                  <select id="categoryInput" name="categoryInput">
+                    <option value="">自动</option>
+                  </select>
+                </label>
+
+                <label>
+                  状态
+                  <select id="statusInput" name="statusInput">
+                    <option value="未看">未看</option>
+                    <option value="浏览中">浏览中</option>
+                    <option value="已看">已看</option>
+                    <option value="已完成">已完成</option>
+                  </select>
+                </label>
+
+                <label>
+                  复看
+                  <select id="revisitInput" name="revisitInput">
+                    <option value="">自动</option>
+                    <option value="只看一次">只看一次</option>
+                    <option value="需要复看">需要复看</option>
+                    <option value="长期参考">长期参考</option>
+                    <option value="要行动">要行动</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="capture-actions">
+                <button class="primary-button" id="submitButton" type="submit">
+                  <span class="ui-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 12h16" /><path d="m14 6 6 6-6 6" /><path d="M4 6h5" /><path d="M4 18h5" /></svg>
+                  </span>
+                  <span>整理收藏</span>
+                </button>
+                <button class="secondary-button" id="draftButton" type="button">
+                  <span class="ui-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="3" /></svg>
+                  </span>
+                  <span>预览归类</span>
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section class="control-panel" aria-label="检索">
+            <div class="search-row">
+              <label class="search-box">
+                检索
+                <input id="searchInput" type="search" autocomplete="off" placeholder="标题、标签、来源、备注" />
+              </label>
+              <label>
+                板块
+                <select id="categoryFilter"></select>
+              </label>
+              <label>
+                状态
+                <select id="statusFilter">
+                  <option value="全部">全部</option>
+                  <option value="未看">未看</option>
+                  <option value="浏览中">浏览中</option>
+                  <option value="已看">已看</option>
+                  <option value="已完成">已完成</option>
+                </select>
+              </label>
+              <label>
+                复看
+                <select id="revisitFilter">
+                  <option value="全部">全部</option>
+                  <option value="只看一次">只看一次</option>
+                  <option value="需要复看">需要复看</option>
+                  <option value="长期参考">长期参考</option>
+                  <option value="要行动">要行动</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="search-results" id="searchResults"></div>
+          </section>
+        </div>
+
+        <div class="view-panel" id="collectionsView">
+          <section class="overview-panel" aria-label="统计">
+            <div class="stats-row" id="statsRow"></div>
+          </section>
+
+          <section class="collection-board" aria-label="收藏列表">
+            <div class="board-head">
+              <h2 id="boardTitle">全部收藏</h2>
+              <span id="boardCount"></span>
+            </div>
+            <div class="item-list" id="itemList"></div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <dialog id="draftDialog">
+      <form method="dialog" class="dialog-body">
+        <div class="dialog-head">
+          <h2>整理预览</h2>
+          <button class="icon-text-button" value="cancel" aria-label="关闭" type="submit">
+            <span class="ui-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+            </span>
+            <span>关闭</span>
+          </button>
+        </div>
+        <div id="draftPreview" class="draft-preview"></div>
+        <menu>
+          <button class="secondary-button" value="cancel">取消</button>
+          <button class="primary-button" id="confirmDraftButton" value="default">加入收藏</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>

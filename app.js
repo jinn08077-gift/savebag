@@ -1,0 +1,1021 @@
+const STORAGE_KEY = "shicang.items.v1";
+
+const categories = [
+  { name: "全部收藏", color: "#202426" },
+  { name: "摄影待拍", color: "#2563a6" },
+  { name: "学习任务", color: "#0f766e" },
+  { name: "美食打卡", color: "#667970" },
+  { name: "攻略分享", color: "#a86812" },
+  { name: "内容灵感", color: "#7c5c34" },
+  { name: "生活清单", color: "#397449" },
+  { name: "待整理", color: "#687174" },
+];
+
+const categoryRules = [
+  {
+    name: "摄影待拍",
+    words: ["拍照", "摄影", "构图", "pose", "机位", "滤镜", "光影", "相机", "照片", "取景", "穿搭拍"],
+  },
+  {
+    name: "学习任务",
+    words: ["学习", "教程", "课程", "练习", "任务", "技能", "方法论", "怎么学", "笔记", "训练"],
+  },
+  {
+    name: "美食打卡",
+    words: [
+      "美食",
+      "餐厅",
+      "咖啡",
+      "咖啡店",
+      "甜品",
+      "探店",
+      "打卡",
+      "菜单",
+      "菜品",
+      "brunch",
+      "吃",
+      "饭店",
+      "酒吧",
+      "面包店",
+      "小吃",
+      "排队",
+      "预订",
+    ],
+  },
+  {
+    name: "攻略分享",
+    words: ["攻略", "路线", "避坑", "清单", "旅行", "酒店", "餐厅", "指南", "流程", "模板"],
+  },
+  {
+    name: "内容灵感",
+    words: [
+      "抖音",
+      "微博",
+      "视频",
+      "剪辑",
+      "脚本",
+      "选题",
+      "灵感",
+      "素材",
+      "镜头",
+      "开头",
+      "标题",
+      "句子",
+      "观点",
+      "文案",
+      "表达",
+      "摘抄",
+      "金句",
+      "评论",
+    ],
+  },
+  {
+    name: "生活清单",
+    words: ["好物", "家居", "收纳", "食谱", "护肤", "穿搭", "店铺", "买", "清洁", "日常"],
+  },
+];
+
+const platformRules = [
+  { name: "微博", words: ["weibo.com", "m.weibo.cn"] },
+  { name: "抖音", words: ["douyin.com", "iesdouyin.com"] },
+  { name: "小红书", words: ["xiaohongshu.com", "xhslink.com"] },
+  { name: "B站", words: ["bilibili.com", "b23.tv"] },
+  { name: "YouTube", words: ["youtube.com", "youtu.be"] },
+  { name: "网页", words: ["http://", "https://"] },
+];
+
+const seedItems = [
+  {
+    id: crypto.randomUUID(),
+    raw: "微博：把复杂的事说清楚，是一种温柔，也是一种能力。",
+    url: "",
+    platform: "文字",
+    title: "把复杂的事说清楚",
+    category: "内容灵感",
+    status: "已看",
+    revisit: "需要复看",
+    progress: 100,
+    tags: ["表达", "写作", "观点"],
+    userNote: "",
+    analysisStatus: "已整理",
+    analysisSource: "粘贴文字",
+    sourceExcerpt: "把复杂的事说清楚，是一种温柔，也是一种能力。",
+    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+  },
+  {
+    id: crypto.randomUUID(),
+    raw: "https://www.xiaohongshu.com/explore/example 周末上海街区拍照机位，光影和构图可以学",
+    url: "https://www.xiaohongshu.com/explore/example",
+    platform: "小红书",
+    title: "周末上海街区拍照机位",
+    category: "摄影待拍",
+    status: "未看",
+    revisit: "要行动",
+    progress: 0,
+    tags: ["小红书", "拍照", "构图"],
+    userNote: "",
+    analysisStatus: "正文不足",
+    analysisSource: "备注文字",
+    sourceExcerpt: "周末上海街区拍照机位，光影和构图可以学",
+    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+  },
+  {
+    id: crypto.randomUUID(),
+    raw: "https://www.douyin.com/video/example 剪辑开头节奏案例，之后做短视频可以拆",
+    url: "https://www.douyin.com/video/example",
+    platform: "抖音",
+    title: "剪辑开头节奏案例",
+    category: "内容灵感",
+    status: "浏览中",
+    revisit: "长期参考",
+    progress: 35,
+    tags: ["抖音", "剪辑", "短视频"],
+    userNote: "",
+    analysisStatus: "正文不足",
+    analysisSource: "备注文字",
+    sourceExcerpt: "剪辑开头节奏案例，之后做短视频可以拆",
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+  },
+];
+
+let items = loadItems();
+let activeCategory = "全部收藏";
+let activeView = "home";
+let draftItem = null;
+
+const els = {
+  homeViewButton: document.querySelector("#homeViewButton"),
+  collectionViewButton: document.querySelector("#collectionViewButton"),
+  homeView: document.querySelector("#homeView"),
+  collectionsView: document.querySelector("#collectionsView"),
+  categoryNav: document.querySelector("#categoryNav"),
+  categoryInput: document.querySelector("#categoryInput"),
+  statusInput: document.querySelector("#statusInput"),
+  revisitInput: document.querySelector("#revisitInput"),
+  sourceInput: document.querySelector("#sourceInput"),
+  captureForm: document.querySelector("#captureForm"),
+  pasteButton: document.querySelector("#pasteButton"),
+  draftButton: document.querySelector("#draftButton"),
+  submitButton: document.querySelector("#submitButton"),
+  exportButton: document.querySelector("#exportButton"),
+  resetButton: document.querySelector("#resetButton"),
+  searchInput: document.querySelector("#searchInput"),
+  categoryFilter: document.querySelector("#categoryFilter"),
+  statusFilter: document.querySelector("#statusFilter"),
+  revisitFilter: document.querySelector("#revisitFilter"),
+  statsRow: document.querySelector("#statsRow"),
+  searchResults: document.querySelector("#searchResults"),
+  boardTitle: document.querySelector("#boardTitle"),
+  boardCount: document.querySelector("#boardCount"),
+  itemList: document.querySelector("#itemList"),
+  draftDialog: document.querySelector("#draftDialog"),
+  draftPreview: document.querySelector("#draftPreview"),
+  confirmDraftButton: document.querySelector("#confirmDraftButton"),
+  analysisMode: document.querySelector("#analysisMode"),
+};
+
+init();
+
+function init() {
+  renderCategoryOptions();
+  render();
+  bindEvents();
+}
+
+function bindEvents() {
+  els.homeViewButton.addEventListener("click", () => setActiveView("home"));
+  els.collectionViewButton.addEventListener("click", () => {
+    activeCategory = "全部收藏";
+    setActiveView("collections");
+  });
+
+  els.captureForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await withBusy("正在打开链接并整理...", async () => {
+      const item = await buildItemFromForm({ remote: true });
+      if (!item) return;
+      addItem(item);
+      els.captureForm.reset();
+    });
+  });
+
+  els.draftButton.addEventListener("click", async () => {
+    await withBusy("正在读取链接内容...", async () => {
+      draftItem = await buildItemFromForm({ remote: true });
+      if (!draftItem) return;
+      renderDraft(draftItem);
+      els.draftDialog.showModal();
+    });
+  });
+
+  els.confirmDraftButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (!draftItem) return;
+    addItem(draftItem);
+    draftItem = null;
+    els.captureForm.reset();
+    els.draftDialog.close();
+  });
+
+  els.pasteButton.addEventListener("click", async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      els.sourceInput.value = text.trim();
+      els.sourceInput.focus();
+    } catch {
+      els.sourceInput.focus();
+    }
+  });
+
+  els.exportButton.addEventListener("click", exportItems);
+
+  els.resetButton.addEventListener("click", () => {
+    if (!items.length || confirm("清空当前收藏并恢复示例？")) {
+      items = structuredClone(seedItems);
+      saveItems();
+      activeCategory = "全部收藏";
+      render();
+    }
+  });
+
+  [els.searchInput, els.categoryFilter, els.statusFilter, els.revisitFilter].forEach((node) => {
+    node.addEventListener("input", renderSearchResults);
+    node.addEventListener("change", renderSearchResults);
+  });
+}
+
+function renderCategoryOptions() {
+  categories
+    .filter((category) => category.name !== "全部收藏")
+    .forEach((category) => {
+      const captureOption = document.createElement("option");
+      captureOption.value = category.name;
+      captureOption.textContent = category.name;
+      els.categoryInput.append(captureOption);
+    });
+
+  categories.forEach((category) => {
+    const filterOption = document.createElement("option");
+    filterOption.value = category.name;
+    filterOption.textContent = category.name;
+    els.categoryFilter.append(filterOption);
+  });
+}
+
+function render() {
+  renderView();
+  renderCategories();
+  renderStats();
+  renderSearchResults();
+  renderItems();
+}
+
+function renderView() {
+  els.homeView.classList.toggle("active", activeView === "home");
+  els.collectionsView.classList.toggle("active", activeView === "collections");
+  els.homeViewButton.classList.toggle("active", activeView === "home");
+  els.collectionViewButton.classList.toggle("active", activeView === "collections");
+}
+
+function renderCategories() {
+  els.categoryNav.innerHTML = "";
+  const counts = categories.reduce((acc, category) => {
+    acc[category.name] =
+      category.name === "全部收藏"
+        ? items.length
+        : items.filter((item) => item.category === category.name).length;
+    return acc;
+  }, {});
+
+  categories.forEach((category) => {
+    const button = document.createElement("button");
+    button.className = `category-button${activeView === "collections" && activeCategory === category.name ? " active" : ""}`;
+    button.type = "button";
+    button.innerHTML = `
+      ${iconMarkup(categoryIcon(category.name), "category-icon")}
+      <span class="category-label">${category.name}</span>
+      <span class="category-count">${counts[category.name] ?? 0}</span>
+    `;
+    button.addEventListener("click", () => {
+      activeCategory = category.name;
+      setActiveView("collections");
+    });
+    els.categoryNav.append(button);
+  });
+}
+
+function renderStats() {
+  const todoCount = items.filter((item) => item.status !== "已完成").length;
+  const revisitCount = items.filter((item) => item.revisit !== "只看一次").length;
+  const actionCount = items.filter((item) => item.revisit === "要行动").length;
+  const resolvedCount = items.filter((item) => item.analysisStatus === "已解析").length;
+  const stats = [
+    ["总收藏", items.length],
+    ["未完成", todoCount],
+    ["可复看", revisitCount],
+    ["要行动", actionCount],
+    ["读到正文", resolvedCount],
+  ];
+
+  els.statsRow.innerHTML = stats
+    .map(([label, value]) => `<div class="stat"><strong>${value}</strong><span>${label}</span></div>`)
+    .join("");
+}
+
+function renderSearchResults() {
+  const filtered = getSearchFilteredItems();
+  if (!isSearchActive()) {
+    els.searchResults.innerHTML = `<div class="search-hint">输入关键词，或选择板块、状态、复看方式开始检索</div>`;
+    return;
+  }
+
+  if (!filtered.length) {
+    els.searchResults.innerHTML = `<div class="search-empty">没有匹配的收藏</div>`;
+    return;
+  }
+
+  els.searchResults.innerHTML = filtered
+    .slice(0, 8)
+    .map(
+      (item) => `
+        <article class="result-card">
+          <div class="item-meta">
+            <span class="pill" data-tone="${toneForCategory(item.category)}">${escapeHtml(item.category)}</span>
+            <span>${escapeHtml(item.platform)}</span>
+            <span>${escapeHtml(item.analysisSource || "本地整理")}</span>
+          </div>
+          <h3>${escapeHtml(item.title)}</h3>
+          ${item.userNote ? `<p class="result-note">备注：${escapeHtml(shorten(item.userNote, 90))}</p>` : ""}
+          <div class="tag-list">
+            ${item.tags.map((tag) => `<button class="tag" type="button">${escapeHtml(tag)}</button>`).join("")}
+          </div>
+        </article>
+      `,
+    )
+    .join("");
+
+  els.searchResults.querySelectorAll(".tag").forEach((tag) => {
+    tag.addEventListener("click", () => {
+      els.searchInput.value = tag.textContent;
+      renderSearchResults();
+    });
+  });
+}
+
+function renderItems() {
+  const filtered = getCollectionItems();
+  els.boardTitle.textContent = activeCategory;
+  els.boardCount.textContent = `${filtered.length} 条`;
+
+  if (!filtered.length) {
+    els.itemList.innerHTML = `<div class="empty-state">没有匹配的收藏</div>`;
+    return;
+  }
+
+  els.itemList.innerHTML = "";
+  filtered.forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "item-card";
+    card.innerHTML = itemCardTemplate(item);
+
+    card.querySelector(".status-select").addEventListener("change", (event) => {
+      updateItem(item.id, { status: event.target.value });
+    });
+
+    card.querySelector(".revisit-select").addEventListener("change", (event) => {
+      updateItem(item.id, { revisit: event.target.value });
+    });
+
+    card.querySelector(".progress-input").addEventListener("input", (event) => {
+      const progress = Number(event.target.value);
+      const status = progress >= 100 ? "已完成" : item.status === "已完成" ? "已看" : item.status;
+      updateItem(item.id, { progress, status });
+    });
+
+    card.querySelector(".note-input").addEventListener("input", (event) => {
+      saveItemNote(item.id, event.target.value);
+    });
+
+    card.querySelector(".tag-add-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = event.currentTarget.querySelector(".tag-input");
+      const tag = input.value.trim();
+      if (!tag) return;
+      addItemTag(item.id, tag);
+    });
+
+    card.querySelectorAll(".tag-remove").forEach((button) => {
+      button.addEventListener("click", () => {
+        removeItemTag(item.id, button.dataset.tag);
+      });
+    });
+
+    const reanalyzeButton = card.querySelector(".reanalyze-button");
+    if (reanalyzeButton) {
+      reanalyzeButton.addEventListener("click", () => reanalyzeItem(item.id));
+    }
+
+    card.querySelector(".delete-button").addEventListener("click", () => {
+      items = items.filter((candidate) => candidate.id !== item.id);
+      saveItems();
+      render();
+    });
+
+    card.querySelectorAll(".tag-search").forEach((tag) => {
+      tag.addEventListener("click", () => {
+        els.searchInput.value = tag.dataset.tag || tag.textContent;
+        els.categoryFilter.value = "全部收藏";
+        setActiveView("home");
+        renderSearchResults();
+      });
+    });
+
+    els.itemList.append(card);
+  });
+}
+
+function itemCardTemplate(item) {
+  const urlAction = item.url
+    ? `<a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">
+         ${iconMarkup("external")}
+         <span>打开链接</span>
+       </a>
+       <button class="reanalyze-button" type="button">
+         ${iconMarkup("refresh")}
+         <span>重新解析</span>
+       </button>`
+    : "";
+  const created = new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(item.createdAt));
+
+  return `
+    <div class="item-top">
+      <div>
+        <h3>${escapeHtml(item.title)}</h3>
+        <div class="item-meta">
+          <span class="pill" data-tone="${toneForCategory(item.category)}">${escapeHtml(item.category)}</span>
+          <span>${escapeHtml(item.platform)}</span>
+          <span>${created}</span>
+          <span>${escapeHtml(item.analysisStatus || "已整理")}</span>
+        </div>
+      </div>
+      <div class="card-actions">
+        ${urlAction}
+        <button class="delete-button" type="button">
+          ${iconMarkup("trash")}
+          <span>删除</span>
+        </button>
+      </div>
+    </div>
+
+    <label class="note-field">
+      <span>备注</span>
+      <textarea class="note-input" rows="3" autocomplete="off" placeholder="写下你自己的判断、待办或打卡提醒">${escapeHtml(item.userNote || "")}</textarea>
+    </label>
+
+    ${tagEditorTemplate(item.tags)}
+
+    <div class="status-grid">
+      <label>
+        状态
+        <select class="status-select">
+          ${["未看", "浏览中", "已看", "已完成"].map((status) => option(status, item.status)).join("")}
+        </select>
+      </label>
+      <label>
+        复看
+        <select class="revisit-select">
+          ${["只看一次", "需要复看", "长期参考", "要行动"].map((revisit) => option(revisit, item.revisit)).join("")}
+        </select>
+      </label>
+      <label>
+        进度
+        <div class="progress-row">
+          <input class="progress-input" type="range" min="0" max="100" step="5" value="${item.progress}" />
+          <span class="progress-value">${item.progress}%</span>
+        </div>
+      </label>
+    </div>
+  `;
+}
+
+function tagEditorTemplate(tags = []) {
+  const normalizedTags = normalizeTags(tags);
+  const tagChips = normalizedTags.length
+    ? normalizedTags
+        .map(
+          (tag) => `
+            <span class="tag-chip">
+              <button class="tag-search" type="button" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}</button>
+              <button class="tag-remove" type="button" data-tag="${escapeAttr(tag)}" aria-label="删除标签 ${escapeAttr(tag)}">
+                ${iconMarkup("x")}
+              </button>
+            </span>
+          `,
+        )
+        .join("")
+    : `<span class="tag-empty">还没有标签</span>`;
+
+  return `
+    <div class="tag-editor">
+      <div class="tag-editor-head">标签</div>
+      <div class="editable-tags">${tagChips}</div>
+      <form class="tag-add-form">
+        <input class="tag-input" type="text" autocomplete="off" placeholder="新增标签" />
+        <button class="tag-add-button" type="submit">
+          ${iconMarkup("plus")}
+          <span>添加</span>
+        </button>
+      </form>
+    </div>
+  `;
+}
+
+function renderDraft(item) {
+  const rows = [
+    ["标题", item.title],
+    ["板块", item.category],
+    ["来源", `${item.platform} · ${item.analysisSource}`],
+    ["状态", `${item.status} · ${item.revisit}`],
+    ["标签", item.tags.join("、")],
+  ];
+  els.draftPreview.innerHTML = rows
+    .map(
+      ([label, value]) => `
+      <div class="draft-row">
+        <span>${label}</span>
+        <span>${escapeHtml(value)}</span>
+      </div>
+    `,
+    )
+    .join("");
+}
+
+function getCollectionItems() {
+  return items
+    .filter((item) => activeCategory === "全部收藏" || item.category === activeCategory)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function getSearchFilteredItems() {
+  const query = els.searchInput.value.trim().toLowerCase();
+  const category = els.categoryFilter.value;
+  const status = els.statusFilter.value;
+  const revisit = els.revisitFilter.value;
+
+  return items
+    .filter((item) => category === "全部收藏" || item.category === category)
+    .filter((item) => status === "全部" || item.status === status)
+    .filter((item) => revisit === "全部" || item.revisit === revisit)
+    .filter((item) => {
+      if (!query) return true;
+      const haystack = [
+        item.title,
+        item.category,
+        item.platform,
+        item.analysisSource,
+        item.sourceExcerpt,
+        item.userNote,
+        item.tags.join(" "),
+        item.raw,
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    })
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function isSearchActive() {
+  return (
+    els.searchInput.value.trim() ||
+    els.categoryFilter.value !== "全部收藏" ||
+    els.statusFilter.value !== "全部" ||
+    els.revisitFilter.value !== "全部"
+  );
+}
+
+async function buildItemFromForm({ remote }) {
+  const raw = els.sourceInput.value.trim();
+  if (!raw) {
+    els.sourceInput.focus();
+    return null;
+  }
+
+  return analyzeInput(raw, {
+    categoryOverride: els.categoryInput.value,
+    revisitOverride: els.revisitInput.value,
+    status: els.statusInput.value,
+    remote,
+  });
+}
+
+async function analyzeInput(raw, options = {}) {
+  const local = analyzeSource(raw);
+  let analysis = local;
+
+  if (options.remote && local.url) {
+    const remote = await fetchLinkAnalysis(local.url);
+    analysis = mergeRemoteAnalysis(local, remote);
+  }
+
+  const category = options.categoryOverride || analysis.category;
+  const revisit = options.revisitOverride || detectRevisit(`${analysis.textForRules} ${category}`, category);
+  const status = options.status || "未看";
+  const progress = status === "已完成" || status === "已看" ? 100 : status === "浏览中" ? 30 : 0;
+  const tags = buildTags(analysis.textForRules, analysis.platform, category);
+
+  return {
+    id: crypto.randomUUID(),
+    raw,
+    url: analysis.url,
+    platform: analysis.platform,
+    title: analysis.title,
+    category,
+    status,
+    revisit,
+    progress,
+    tags,
+    userNote: "",
+    analysisStatus: analysis.analysisStatus,
+    analysisSource: analysis.analysisSource,
+    sourceExcerpt: analysis.sourceExcerpt,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function analyzeSource(raw) {
+  const url = extractUrl(raw);
+  const platform = detectPlatform(raw, url);
+  const note = raw.replace(url, "").trim().replace(/\s+/g, " ");
+  const textForRules = `${platform} ${raw}`.toLowerCase();
+  const category = detectCategory(textForRules, platform);
+  const title = buildTitle({ note, platform, category, url });
+  const sourceExcerpt = note || "";
+
+  return {
+    url,
+    platform,
+    note,
+    title,
+    category,
+    description: "",
+    contentText: note,
+    textForRules,
+    analysisStatus: note ? "已整理" : "待解析",
+    analysisSource: note ? "粘贴文字" : url ? "链接" : "本地规则",
+    sourceExcerpt,
+    remoteMessage: "",
+  };
+}
+
+async function fetchLinkAnalysis(url) {
+  try {
+    const response = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!response.ok) {
+      return { ok: false, reason: "解析服务没有返回可用结果" };
+    }
+    return response.json();
+  } catch {
+    return {
+      ok: false,
+      reason: "解析服务未启动，或当前链接被浏览器/平台限制读取",
+    };
+  }
+}
+
+function mergeRemoteAnalysis(local, remote) {
+  if (!remote?.ok) {
+    return {
+      ...local,
+      analysisStatus: local.note ? "正文不足" : "解析受限",
+      analysisSource: local.note ? "备注文字" : "链接元信息",
+      remoteMessage: remote?.reason || "没有读到正文",
+    };
+  }
+
+  const description = normalizeText(remote.description || "");
+  const contentText = normalizeText(remote.text || "");
+  const combinedText = normalizeText([description, contentText].filter(Boolean).join(" "));
+  const textForRules = `${local.textForRules} ${remote.title || ""} ${description} ${combinedText}`.toLowerCase();
+  const category = detectCategory(textForRules, local.platform);
+  const hasUsefulContent = combinedText.length >= 40;
+  const hasMetaDescription = description.length >= 30;
+  const title = buildTitle({
+    note: local.note,
+    remoteTitle: remote.title,
+    platform: local.platform,
+    category,
+    url: remote.finalUrl || local.url,
+  });
+
+  return {
+    ...local,
+    url: remote.finalUrl || local.url,
+    title,
+    category,
+    description,
+    contentText: combinedText || local.note,
+    textForRules,
+    analysisStatus: hasUsefulContent ? "已解析" : hasMetaDescription ? "正文不足" : "解析受限",
+    analysisSource: hasUsefulContent ? "网页正文" : hasMetaDescription ? "网页元信息" : local.note ? "备注文字" : "链接元信息",
+    sourceExcerpt: shorten(combinedText || description || local.note || remote.title || "", 160),
+    remoteMessage: hasUsefulContent ? "" : "没有读到足够正文，可能需要登录、跳转或平台限制",
+  };
+}
+
+function extractUrl(raw) {
+  const match = raw.match(/https?:\/\/[^\s，。；、]+/i);
+  return match ? match[0] : "";
+}
+
+function detectPlatform(raw, url) {
+  const text = `${url} ${raw}`.toLowerCase();
+  const found = platformRules.find((rule) => rule.words.some((word) => text.includes(word)));
+  if (found) return found.name;
+  return url ? "网页" : "文字";
+}
+
+function detectCategory(text, platform) {
+  const scored = categoryRules
+    .map((rule) => ({
+      name: rule.name,
+      score: rule.words.reduce((sum, word) => sum + (text.includes(word.toLowerCase()) ? 1 : 0), 0),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  if (scored[0]?.score) return scored[0].name;
+  if (platform === "抖音" || platform === "微博" || platform === "文字") return "内容灵感";
+  if (platform === "小红书") return "攻略分享";
+  return "待整理";
+}
+
+function buildTags(text, platform, category) {
+  const keywords = new Set([platform, category]);
+  categoryRules.forEach((rule) => {
+    rule.words.forEach((word) => {
+      if (text.includes(word.toLowerCase())) keywords.add(word);
+    });
+  });
+
+  return Array.from(keywords)
+    .filter((tag) => tag && tag !== "网页" && tag !== "文字")
+    .slice(0, 7);
+}
+
+function buildTitle({ note, remoteTitle, platform, category, url }) {
+  const cleanRemoteTitle = normalizeText(remoteTitle || "");
+  if (cleanRemoteTitle.length > 3) return shorten(cleanRemoteTitle, 34);
+
+  if (note) {
+    return shorten(note.split(/[\n。！？!?]/).find(Boolean) || note, 34);
+  }
+
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      const path = parsed.pathname.split("/").filter(Boolean).slice(-2).join(" / ");
+      return `${platform} · ${path || parsed.hostname}`;
+    } catch {
+      return `${platform}收藏`;
+    }
+  }
+
+  return `${category}收藏`;
+}
+
+function detectRevisit(text, category) {
+  if (["学习任务", "摄影待拍", "美食打卡"].includes(category)) return "要行动";
+  if (["攻略分享", "内容灵感"].includes(category)) return "长期参考";
+  if (text.includes("复看") || text.includes("以后还要看")) return "需要复看";
+  if (text.includes("一次") || text.includes("看完")) return "只看一次";
+  return "只看一次";
+}
+
+function addItem(item) {
+  items = [item, ...items];
+  saveItems();
+  activeCategory = item.category;
+  setActiveView("collections");
+}
+
+async function reanalyzeItem(id) {
+  const existing = items.find((item) => item.id === id);
+  if (!existing) return;
+
+  updateItem(id, { analysisStatus: "解析中", analysisSource: "正在读取链接" });
+  await withBusy("正在重新解析链接...", async () => {
+    const fresh = await analyzeInput(existing.raw, {
+      remote: true,
+      status: existing.status,
+      revisitOverride: existing.revisit,
+    });
+    updateItem(id, {
+      url: fresh.url,
+      platform: fresh.platform,
+      title: fresh.title,
+      category: fresh.category,
+      tags: fresh.tags,
+      analysisStatus: fresh.analysisStatus,
+      analysisSource: fresh.analysisSource,
+      sourceExcerpt: fresh.sourceExcerpt,
+    });
+    activeCategory = fresh.category;
+  });
+}
+
+function updateItem(id, patch) {
+  items = items.map((item) => (item.id === id ? { ...item, ...patch } : item));
+  saveItems();
+  render();
+}
+
+function saveItemNote(id, userNote) {
+  items = items.map((item) => (item.id === id ? { ...item, userNote } : item));
+  saveItems();
+}
+
+function addItemTag(id, tag) {
+  const normalizedTag = normalizeTag(tag);
+  if (!normalizedTag) return;
+  items = items.map((item) => {
+    if (item.id !== id) return item;
+    return { ...item, tags: normalizeTags([...(item.tags || []), normalizedTag]) };
+  });
+  saveItems();
+  render();
+}
+
+function removeItemTag(id, tag) {
+  const normalizedTag = normalizeTag(tag);
+  items = items.map((item) => {
+    if (item.id !== id) return item;
+    return {
+      ...item,
+      tags: normalizeTags(item.tags || []).filter((candidate) => candidate !== normalizedTag),
+    };
+  });
+  saveItems();
+  render();
+}
+
+function setActiveView(view) {
+  activeView = view;
+  render();
+}
+
+async function withBusy(message, task) {
+  els.submitButton.disabled = true;
+  els.draftButton.disabled = true;
+  const previous = els.analysisMode.textContent;
+  els.analysisMode.textContent = message;
+  try {
+    await task();
+  } finally {
+    els.submitButton.disabled = false;
+    els.draftButton.disabled = false;
+    els.analysisMode.textContent = previous;
+  }
+}
+
+function loadItems() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (!saved) return structuredClone(seedItems);
+  try {
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed.map(migrateItem).filter(Boolean) : structuredClone(seedItems);
+  } catch {
+    return structuredClone(seedItems);
+  }
+}
+
+function migrateItem(item) {
+  if (!item || typeof item !== "object") return null;
+  const { summary, ...rest } = item;
+  const allowed = new Set(categories.map((category) => category.name));
+  const category = rest.category === "好句观点" ? "内容灵感" : rest.category;
+  return {
+    ...rest,
+    category: allowed.has(category) ? category : "待整理",
+    tags: normalizeTags(rest.tags || []).filter((tag) => tag !== "好句观点").slice(0, 7),
+    userNote: rest.userNote || "",
+    analysisStatus: rest.analysisStatus || "已整理",
+    analysisSource: rest.analysisSource || "历史数据",
+    sourceExcerpt: rest.sourceExcerpt || "",
+  };
+}
+
+function saveItems() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+}
+
+function exportItems() {
+  const payload = JSON.stringify(items, null, 2);
+  const blob = new Blob([payload], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `shicang-${new Date().toISOString().slice(0, 10)}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function toneForCategory(category) {
+  const tones = {
+    摄影待拍: "blue",
+    学习任务: "green",
+    美食打卡: "green",
+    攻略分享: "amber",
+    内容灵感: "coral",
+    生活清单: "green",
+  };
+  return tones[category] || "";
+}
+
+function categoryIcon(category) {
+  const icons = {
+    全部收藏: "archive",
+    摄影待拍: "camera",
+    学习任务: "book",
+    美食打卡: "utensils",
+    攻略分享: "map",
+    内容灵感: "spark",
+    生活清单: "checklist",
+    待整理: "inbox",
+  };
+  return icons[category] || "inbox";
+}
+
+function iconMarkup(name, className = "ui-icon") {
+  const paths = {
+    archive: '<path d="M5 7h14" /><path d="M5 7l1.2 13h11.6L19 7" /><path d="M8 7V5h8v2" /><path d="M9.5 12h5" />',
+    camera: '<path d="M4 8h4l1.6-2h4.8L16 8h4v11H4z" /><circle cx="12" cy="13.5" r="3.2" />',
+    book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21.5z" /><path d="M4 5.5v16" /><path d="M8 7h8" />',
+    utensils: '<path d="M7 3v7" /><path d="M4.5 3v7" /><path d="M9.5 3v7" /><path d="M4.5 10h5" /><path d="M7 10v11" /><path d="M15 3v18" /><path d="M15 3c3 1.6 4.5 4.2 4.5 7.5 0 2.6-1.5 4.5-4.5 4.5" />',
+    map: '<path d="M8 5 3 7v13l5-2 8 2 5-2V5l-5 2z" /><path d="M8 5v13" /><path d="M16 7v13" />',
+    spark: '<path d="M12 3v4" /><path d="M12 17v4" /><path d="M3 12h4" /><path d="M17 12h4" /><path d="m6.5 6.5 2.8 2.8" /><path d="m14.7 14.7 2.8 2.8" /><path d="m17.5 6.5-2.8 2.8" /><path d="m9.3 14.7-2.8 2.8" />',
+    checklist: '<path d="m4 7 2 2 3-4" /><path d="M11 7h9" /><path d="m4 15 2 2 3-4" /><path d="M11 15h9" />',
+    inbox: '<path d="M4 4h16v16H4z" /><path d="M4 14h4l2 3h4l2-3h4" />',
+    external: '<path d="M14 4h6v6" /><path d="m10 14 10-10" /><path d="M20 14v5H5V4h5" />',
+    refresh: '<path d="M20 6v5h-5" /><path d="M4 18v-5h5" /><path d="M18 11a6.5 6.5 0 0 0-11-4.5L4 9" /><path d="M6 13a6.5 6.5 0 0 0 11 4.5l3-2.5" />',
+    trash: '<path d="M4 7h16" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M6 7l1 14h10l1-14" /><path d="M9 7V4h6v3" />',
+    plus: '<path d="M12 5v14" /><path d="M5 12h14" />',
+    x: '<path d="M18 6 6 18" /><path d="m6 6 12 12" />',
+  };
+  return `<span class="${className}" aria-hidden="true"><svg viewBox="0 0 24 24">${paths[name] || paths.inbox}</svg></span>`;
+}
+
+function normalizeTags(tags) {
+  const seen = new Set();
+  return tags
+    .map(normalizeTag)
+    .filter(Boolean)
+    .filter((tag) => {
+      const key = tag.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function normalizeTag(tag) {
+  return normalizeText(tag)
+    .replace(/^#+/, "")
+    .replace(/[，,、]+/g, "")
+    .slice(0, 16);
+}
+
+function normalizeText(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/[\u200b-\u200f\ufeff]/g, "")
+    .trim();
+}
+
+function shorten(value, length) {
+  const text = normalizeText(value);
+  return text.length > length ? `${text.slice(0, length)}...` : text;
+}
+
+function option(value, selected) {
+  return `<option value="${escapeAttr(value)}"${value === selected ? " selected" : ""}>${escapeHtml(value)}</option>`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => {
+    const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
+    return map[char];
+  });
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, "&#096;");
+}
