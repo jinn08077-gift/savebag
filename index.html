@@ -7,8 +7,15 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <button class="mobile-nav-toggle" id="mobileNavToggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="打开菜单">
+      <span class="ui-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></svg>
+      </span>
+      <span>菜单</span>
+    </button>
+    <button class="drawer-scrim" id="drawerScrim" type="button" aria-label="关闭菜单"></button>
     <div class="app-shell">
-      <aside class="sidebar">
+      <aside class="sidebar" id="sidebar">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24">
@@ -43,21 +50,6 @@
               <span>新增分类</span>
             </button>
           </form>
-        </div>
-
-        <div class="side-actions">
-          <button class="ghost-button" id="exportButton" type="button">
-            <span class="ui-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></svg>
-            </span>
-            <span>导出数据</span>
-          </button>
-          <button class="ghost-button danger" id="resetButton" type="button">
-            <span class="ui-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M4 7h16" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M6 7l1 14h10l1-14" /><path d="M9 7V4h6v3" /></svg>
-            </span>
-            <span>清空示例</span>
-          </button>
         </div>
       </aside>
 
@@ -104,16 +96,6 @@
                   </select>
                 </label>
 
-                <label>
-                  复看
-                  <select id="revisitInput" name="revisitInput">
-                    <option value="">自动</option>
-                    <option value="只看一次">只看一次</option>
-                    <option value="需要复看">需要复看</option>
-                    <option value="长期参考">长期参考</option>
-                    <option value="要行动">要行动</option>
-                  </select>
-                </label>
               </div>
 
               <div class="capture-actions">
@@ -151,16 +133,6 @@
                   <option value="浏览中">浏览中</option>
                   <option value="已看">已看</option>
                   <option value="已完成">已完成</option>
-                </select>
-              </label>
-              <label>
-                复看
-                <select id="revisitFilter">
-                  <option value="全部">全部</option>
-                  <option value="只看一次">只看一次</option>
-                  <option value="需要复看">需要复看</option>
-                  <option value="长期参考">长期参考</option>
-                  <option value="要行动">要行动</option>
                 </select>
               </label>
             </div>

@@ -1,5 +1,6 @@
 const STORAGE_KEY = "shicang.items.v1";
 const CATEGORY_STORAGE_KEY = "shicang.customCategories.v1";
+const HIDDEN_CATEGORY_STORAGE_KEY = "shicang.hiddenBaseCategories.v1";
 
 const baseCategories = [
   { name: "全部收藏", color: "#202426" },
@@ -13,6 +14,7 @@ const baseCategories = [
 ];
 
 let customCategories = loadCustomCategories();
+let hiddenBaseCategories = loadHiddenBaseCategories();
 
 const categoryRules = [
   {
@@ -96,8 +98,6 @@ const seedItems = [
     title: "把复杂的事说清楚",
     category: "内容灵感",
     status: "已看",
-    revisit: "需要复看",
-    progress: 100,
     tags: ["表达", "写作", "观点"],
     userNote: "",
     analysisStatus: "已整理",
@@ -113,8 +113,6 @@ const seedItems = [
     title: "周末上海街区拍照机位",
     category: "摄影待拍",
     status: "未看",
-    revisit: "要行动",
-    progress: 0,
     tags: ["小红书", "拍照", "构图"],
     userNote: "",
     analysisStatus: "正文不足",
@@ -130,8 +128,6 @@ const seedItems = [
     title: "剪辑开头节奏案例",
     category: "内容灵感",
     status: "浏览中",
-    revisit: "长期参考",
-    progress: 35,
     tags: ["抖音", "剪辑", "短视频"],
     userNote: "",
     analysisStatus: "正文不足",
@@ -147,6 +143,8 @@ let activeView = "home";
 let draftItem = null;
 
 const els = {
+  mobileNavToggle: document.querySelector("#mobileNavToggle"),
+  drawerScrim: document.querySelector("#drawerScrim"),
   homeViewButton: document.querySelector("#homeViewButton"),
   homeView: document.querySelector("#homeView"),
   collectionsView: document.querySelector("#collectionsView"),
@@ -155,18 +153,14 @@ const els = {
   categoryNameInput: document.querySelector("#categoryNameInput"),
   categoryInput: document.querySelector("#categoryInput"),
   statusInput: document.querySelector("#statusInput"),
-  revisitInput: document.querySelector("#revisitInput"),
   sourceInput: document.querySelector("#sourceInput"),
   captureForm: document.querySelector("#captureForm"),
   pasteButton: document.querySelector("#pasteButton"),
   draftButton: document.querySelector("#draftButton"),
   submitButton: document.querySelector("#submitButton"),
-  exportButton: document.querySelector("#exportButton"),
-  resetButton: document.querySelector("#resetButton"),
   searchInput: document.querySelector("#searchInput"),
   categoryFilter: document.querySelector("#categoryFilter"),
   statusFilter: document.querySelector("#statusFilter"),
-  revisitFilter: document.querySelector("#revisitFilter"),
   statsRow: document.querySelector("#statsRow"),
   searchResults: document.querySelector("#searchResults"),
   boardTitle: document.querySelector("#boardTitle"),
@@ -186,7 +180,17 @@ function init() {
 }
 
 function bindEvents() {
-  els.homeViewButton.addEventListener("click", () => setActiveView("home"));
+  els.mobileNavToggle.addEventListener("click", () => toggleMobileDrawer());
+  els.drawerScrim.addEventListener("click", closeMobileDrawer);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeMobileDrawer();
+  });
+
+  els.homeViewButton.addEventListener("click", () => {
+    setActiveView("home");
+    closeMobileDrawer();
+  });
 
   els.captureForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -226,23 +230,12 @@ function bindEvents() {
     }
   });
 
-  els.exportButton.addEventListener("click", exportItems);
-
-  els.resetButton.addEventListener("click", () => {
-    if (!items.length || confirm("清空当前收藏并恢复示例？")) {
-      items = structuredClone(seedItems);
-      saveItems();
-      activeCategory = "全部收藏";
-      render();
-    }
-  });
-
   els.categoryAddForm.addEventListener("submit", (event) => {
     event.preventDefault();
     addCustomCategory(els.categoryNameInput.value);
   });
 
-  [els.searchInput, els.categoryFilter, els.statusFilter, els.revisitFilter].forEach((node) => {
+  [els.searchInput, els.categoryFilter, els.statusFilter].forEach((node) => {
     node.addEventListener("input", renderSearchResults);
     node.addEventListener("change", renderSearchResults);
   });
@@ -307,6 +300,10 @@ function renderCategories() {
   }, {});
 
   categories.forEach((category) => {
+    const canRemove = canRemoveCategory(category.name);
+    const wrapper = document.createElement("div");
+    wrapper.className = `category-item${canRemove ? " removable" : ""}`;
+
     const button = document.createElement("button");
     button.className = `category-button${activeView === "collections" && activeCategory === category.name ? " active" : ""}`;
     button.type = "button";
@@ -318,21 +315,25 @@ function renderCategories() {
     button.addEventListener("click", () => {
       activeCategory = category.name;
       setActiveView("collections");
+      closeMobileDrawer();
     });
-    els.categoryNav.append(button);
+    wrapper.append(button);
+
+    if (canRemove) {
+      wrapper.title = "右键或长按删除分类";
+      bindCategoryDeleteGestures(wrapper, category.name);
+    }
+
+    els.categoryNav.append(wrapper);
   });
 }
 
 function renderStats() {
   const todoCount = items.filter((item) => item.status !== "已完成").length;
-  const revisitCount = items.filter((item) => item.revisit !== "只看一次").length;
-  const actionCount = items.filter((item) => item.revisit === "要行动").length;
   const resolvedCount = items.filter((item) => item.analysisStatus === "已解析").length;
   const stats = [
     ["总收藏", items.length],
     ["未完成", todoCount],
-    ["可复看", revisitCount],
-    ["要行动", actionCount],
     ["读到正文", resolvedCount],
   ];
 
@@ -344,7 +345,7 @@ function renderStats() {
 function renderSearchResults() {
   const filtered = getSearchFilteredItems();
   if (!isSearchActive()) {
-    els.searchResults.innerHTML = `<div class="search-hint">输入关键词，或选择板块、状态、复看方式开始检索</div>`;
+    els.searchResults.innerHTML = `<div class="search-hint">输入关键词，或选择板块、状态开始检索</div>`;
     return;
   }
 
@@ -400,14 +401,18 @@ function renderItems() {
       updateItem(item.id, { status: event.target.value });
     });
 
-    card.querySelector(".revisit-select").addEventListener("change", (event) => {
-      updateItem(item.id, { revisit: event.target.value });
+    card.querySelector(".analysis-title-input").addEventListener("change", (event) => {
+      const title = normalizeText(event.target.value);
+      updateItem(item.id, { title: title || item.title, analysisStatus: "已手动修改" });
     });
 
-    card.querySelector(".progress-input").addEventListener("input", (event) => {
-      const progress = Number(event.target.value);
-      const status = progress >= 100 ? "已完成" : item.status === "已完成" ? "已看" : item.status;
-      updateItem(item.id, { progress, status });
+    card.querySelector(".analysis-platform-input").addEventListener("change", (event) => {
+      const platform = normalizeText(event.target.value);
+      updateItem(item.id, { platform: platform || item.platform, analysisStatus: "已手动修改" });
+    });
+
+    card.querySelector(".analysis-category-select").addEventListener("change", (event) => {
+      updateItem(item.id, { category: event.target.value, analysisStatus: "已手动修改" });
     });
 
     card.querySelector(".tag-add-form").addEventListener("submit", (event) => {
@@ -502,27 +507,40 @@ function itemCardTemplate(item) {
       </div>
     </div>
 
-    ${tagEditorTemplate(item.tags)}
+    <div class="item-edit-panel">
+      ${analysisEditorTemplate(item)}
+      ${tagEditorTemplate(item.tags)}
+    </div>
+  `;
+}
 
-    <div class="status-grid">
-      <label>
+function analysisEditorTemplate(item) {
+  const categoryOptions = getCategories()
+    .filter((category) => category.name !== "全部收藏")
+    .map((category) => option(category.name, item.category))
+    .join("");
+
+  return `
+    <div class="analysis-editor">
+      <label class="analysis-field title-field">
+        标题
+        <input class="analysis-title-input" type="text" autocomplete="off" value="${escapeAttr(item.title)}" />
+      </label>
+      <label class="analysis-field">
+        板块
+        <select class="analysis-category-select">
+          ${categoryOptions}
+        </select>
+      </label>
+      <label class="analysis-field">
+        来源
+        <input class="analysis-platform-input" type="text" autocomplete="off" value="${escapeAttr(item.platform)}" />
+      </label>
+      <label class="analysis-field">
         状态
         <select class="status-select">
           ${["未看", "浏览中", "已看", "已完成"].map((status) => option(status, item.status)).join("")}
         </select>
-      </label>
-      <label>
-        复看
-        <select class="revisit-select">
-          ${["只看一次", "需要复看", "长期参考", "要行动"].map((revisit) => option(revisit, item.revisit)).join("")}
-        </select>
-      </label>
-      <label>
-        进度
-        <div class="progress-row">
-          <input class="progress-input" type="range" min="0" max="100" step="5" value="${item.progress}" />
-          <span class="progress-value">${item.progress}%</span>
-        </div>
       </label>
     </div>
   `;
@@ -547,7 +565,6 @@ function tagEditorTemplate(tags = []) {
 
   return `
     <div class="tag-editor">
-      <div class="tag-editor-head">标签</div>
       <div class="editable-tags">
         ${tagChips}
         <button class="tag-add-toggle" type="button">
@@ -603,12 +620,42 @@ function bindTagDeleteGestures(chip, itemId) {
   });
 }
 
+function bindCategoryDeleteGestures(categoryItem, categoryName) {
+  let longPressTimer = null;
+  let longPressTriggered = false;
+
+  categoryItem.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    removeCategory(categoryName);
+  });
+
+  categoryItem.addEventListener("touchstart", () => {
+    longPressTriggered = false;
+    longPressTimer = window.setTimeout(() => {
+      longPressTriggered = true;
+      removeCategory(categoryName);
+    }, 620);
+  }, { passive: true });
+
+  ["touchend", "touchcancel", "touchmove"].forEach((eventName) => {
+    categoryItem.addEventListener(eventName, (event) => {
+      if (longPressTimer) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      if (longPressTriggered) {
+        event.preventDefault();
+      }
+    }, { passive: false });
+  });
+}
+
 function renderDraft(item) {
   const rows = [
     ["标题", item.title],
     ["板块", item.category],
     ["来源", `${item.platform} · ${item.analysisSource}`],
-    ["状态", `${item.status} · ${item.revisit}`],
+    ["状态", item.status],
     ["标签", item.tags.join("、")],
   ];
   els.draftPreview.innerHTML = rows
@@ -633,12 +680,10 @@ function getSearchFilteredItems() {
   const query = els.searchInput.value.trim().toLowerCase();
   const category = els.categoryFilter.value;
   const status = els.statusFilter.value;
-  const revisit = els.revisitFilter.value;
 
   return items
     .filter((item) => category === "全部收藏" || item.category === category)
     .filter((item) => status === "全部" || item.status === status)
-    .filter((item) => revisit === "全部" || item.revisit === revisit)
     .filter((item) => {
       if (!query) return true;
       const haystack = [
@@ -661,8 +706,7 @@ function isSearchActive() {
   return (
     els.searchInput.value.trim() ||
     els.categoryFilter.value !== "全部收藏" ||
-    els.statusFilter.value !== "全部" ||
-    els.revisitFilter.value !== "全部"
+    els.statusFilter.value !== "全部"
   );
 }
 
@@ -675,7 +719,6 @@ async function buildItemFromForm({ remote }) {
 
   return analyzeInput(raw, {
     categoryOverride: els.categoryInput.value,
-    revisitOverride: els.revisitInput.value,
     status: els.statusInput.value,
     remote,
   });
@@ -690,10 +733,8 @@ async function analyzeInput(raw, options = {}) {
     analysis = mergeRemoteAnalysis(local, remote);
   }
 
-  const category = options.categoryOverride || analysis.category;
-  const revisit = options.revisitOverride || detectRevisit(`${analysis.textForRules} ${category}`, category);
+  const category = resolveCategoryName(options.categoryOverride || analysis.category);
   const status = options.status || "未看";
-  const progress = status === "已完成" || status === "已看" ? 100 : status === "浏览中" ? 30 : 0;
   const tags = buildTags(analysis.textForRules, analysis.platform, category);
 
   return {
@@ -704,8 +745,6 @@ async function analyzeInput(raw, options = {}) {
     title: analysis.title,
     category,
     status,
-    revisit,
-    progress,
     tags,
     userNote: "",
     analysisStatus: analysis.analysisStatus,
@@ -859,14 +898,6 @@ function buildTitle({ note, remoteTitle, platform, category, url }) {
   return `${category}收藏`;
 }
 
-function detectRevisit(text, category) {
-  if (["学习任务", "摄影待拍", "美食打卡"].includes(category)) return "要行动";
-  if (["攻略分享", "内容灵感"].includes(category)) return "长期参考";
-  if (text.includes("复看") || text.includes("以后还要看")) return "需要复看";
-  if (text.includes("一次") || text.includes("看完")) return "只看一次";
-  return "只看一次";
-}
-
 function addItem(item) {
   items = [item, ...items];
   saveItems();
@@ -883,7 +914,6 @@ async function reanalyzeItem(id) {
     const fresh = await analyzeInput(existing.raw, {
       remote: true,
       status: existing.status,
-      revisitOverride: existing.revisit,
     });
     updateItem(id, {
       url: fresh.url,
@@ -934,6 +964,18 @@ function setActiveView(view) {
   render();
 }
 
+function toggleMobileDrawer(force) {
+  const shouldOpen = typeof force === "boolean" ? force : !document.body.classList.contains("drawer-open");
+  document.body.classList.toggle("drawer-open", shouldOpen);
+  els.mobileNavToggle.setAttribute("aria-expanded", String(shouldOpen));
+  els.mobileNavToggle.setAttribute("aria-label", shouldOpen ? "关闭菜单" : "打开菜单");
+}
+
+function closeMobileDrawer() {
+  if (!document.body.classList.contains("drawer-open")) return;
+  toggleMobileDrawer(false);
+}
+
 async function withBusy(message, task) {
   els.submitButton.disabled = true;
   els.draftButton.disabled = true;
@@ -961,7 +1003,7 @@ function loadItems() {
 
 function migrateItem(item) {
   if (!item || typeof item !== "object") return null;
-  const { summary, ...rest } = item;
+  const { summary, revisit, progress, ...rest } = item;
   const allowed = new Set(getCategories().map((category) => category.name));
   const category = rest.category === "好句观点" ? "内容灵感" : rest.category;
   return {
@@ -980,18 +1022,40 @@ function saveItems() {
 }
 
 function getCategories() {
+  const hiddenBaseNames = new Set(hiddenBaseCategories);
   const customCategoryItems = customCategories.map((name) => ({
     name,
     color: "#687174",
     custom: true,
   }));
-  return [...baseCategories, ...customCategoryItems];
+  return [
+    ...baseCategories.filter((category) => category.name === "全部收藏" || !hiddenBaseNames.has(category.name)),
+    ...customCategoryItems,
+  ];
+}
+
+function resolveCategoryName(categoryName) {
+  const availableCategories = getCategories().filter((category) => category.name !== "全部收藏");
+  if (availableCategories.some((category) => category.name === categoryName)) return categoryName;
+  return availableCategories[0]?.name || "待整理";
 }
 
 function addCustomCategory(rawName) {
   const name = normalizeCategoryName(rawName);
   if (!name) {
     els.categoryNameInput.focus();
+    return;
+  }
+
+  const hiddenBaseCategory = baseCategories.find((category) => (
+    category.name.toLowerCase() === name.toLowerCase() && hiddenBaseCategories.includes(category.name)
+  ));
+  if (hiddenBaseCategory) {
+    hiddenBaseCategories = hiddenBaseCategories.filter((category) => category !== hiddenBaseCategory.name);
+    saveHiddenBaseCategories();
+    els.categoryNameInput.value = "";
+    activeCategory = hiddenBaseCategory.name;
+    setActiveView("collections");
     return;
   }
 
@@ -1010,6 +1074,41 @@ function addCustomCategory(rawName) {
   setActiveView("collections");
 }
 
+function canRemoveCategory(categoryName) {
+  if (categoryName === "全部收藏") return false;
+  return getCategories().some((category) => category.name === categoryName);
+}
+
+function removeCategory(categoryName) {
+  const normalizedCategoryName = normalizeCategoryName(categoryName);
+  if (!normalizedCategoryName) return;
+  if (!canRemoveCategory(normalizedCategoryName)) return;
+
+  const remainingCategories = getCategories().filter((category) => (
+    category.name !== "全部收藏" && category.name !== normalizedCategoryName
+  ));
+  if (!remainingCategories.length) return;
+
+  const isCustom = customCategories.some((name) => name === normalizedCategoryName);
+  if (isCustom) {
+    customCategories = customCategories.filter((name) => name !== normalizedCategoryName);
+  } else {
+    hiddenBaseCategories = normalizeHiddenBaseCategories([...hiddenBaseCategories, normalizedCategoryName]);
+  }
+
+  const fallbackCategory = remainingCategories[0].name;
+  items = items.map((item) => (
+    item.category === normalizedCategoryName ? { ...item, category: fallbackCategory } : item
+  ));
+  if (activeCategory === normalizedCategoryName) {
+    activeCategory = "全部收藏";
+  }
+  saveCustomCategories();
+  saveHiddenBaseCategories();
+  saveItems();
+  render();
+}
+
 function loadCustomCategories() {
   const saved = localStorage.getItem(CATEGORY_STORAGE_KEY);
   if (!saved) return [];
@@ -1023,6 +1122,21 @@ function loadCustomCategories() {
 
 function saveCustomCategories() {
   localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(customCategories));
+}
+
+function loadHiddenBaseCategories() {
+  const saved = localStorage.getItem(HIDDEN_CATEGORY_STORAGE_KEY);
+  if (!saved) return [];
+  try {
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? normalizeHiddenBaseCategories(parsed) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHiddenBaseCategories() {
+  localStorage.setItem(HIDDEN_CATEGORY_STORAGE_KEY, JSON.stringify(hiddenBaseCategories));
 }
 
 function normalizeCustomCategories(values) {
@@ -1039,15 +1153,13 @@ function normalizeCustomCategories(values) {
     });
 }
 
-function exportItems() {
-  const payload = JSON.stringify(items, null, 2);
-  const blob = new Blob([payload], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `shicang-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+function normalizeHiddenBaseCategories(values) {
+  const removableBaseNames = new Set(
+    baseCategories
+      .filter((category) => category.name !== "全部收藏")
+      .map((category) => category.name),
+  );
+  return [...new Set(values.map(normalizeCategoryName).filter((name) => removableBaseNames.has(name)))];
 }
 
 function toneForCategory(category) {
