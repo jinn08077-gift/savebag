@@ -180,6 +180,8 @@ function init() {
 }
 
 function bindEvents() {
+  lockPageZoom();
+
   els.mobileNavToggle.addEventListener("click", () => toggleMobileDrawer());
   els.drawerScrim.addEventListener("click", closeMobileDrawer);
 
@@ -239,6 +241,18 @@ function bindEvents() {
     node.addEventListener("input", renderSearchResults);
     node.addEventListener("change", renderSearchResults);
   });
+}
+
+function lockPageZoom() {
+  ["gesturestart", "gesturechange", "gestureend"].forEach((eventName) => {
+    document.addEventListener(eventName, (event) => event.preventDefault(), { passive: false });
+  });
+
+  document.addEventListener("touchmove", (event) => {
+    if (event.touches.length > 1) {
+      event.preventDefault();
+    }
+  }, { passive: false });
 }
 
 function renderCategoryOptions() {
