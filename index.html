@@ -6,7 +6,48 @@
     <title>Saved baggg</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <body class="auth-required">
+    <section class="auth-screen" id="authScreen" aria-label="登录注册">
+      <div class="auth-card">
+        <div class="auth-brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M6.5 8.5h11l-.8 10.2a2 2 0 0 1-2 1.8H9.3a2 2 0 0 1-2-1.8L6.5 8.5Z" />
+              <path d="M9 8.5V7a3 3 0 0 1 6 0v1.5" />
+              <path d="M10 13h4" />
+            </svg>
+          </div>
+          <div>
+            <h1>Saved baggg</h1>
+            <p>登录后进入你的收藏空间</p>
+          </div>
+        </div>
+
+        <form class="auth-form" id="authForm">
+          <div class="auth-mode" role="tablist" aria-label="账号模式">
+            <button class="active" id="loginModeButton" type="button">登录</button>
+            <button id="registerModeButton" type="button">注册</button>
+          </div>
+
+          <label>
+            账号
+            <input id="authUsername" type="text" autocomplete="username" maxlength="40" placeholder="输入账号" required />
+          </label>
+
+          <label>
+            密码
+            <input id="authPassword" type="password" autocomplete="current-password" minlength="6" placeholder="至少 6 位" required />
+          </label>
+
+          <p class="auth-message" id="authMessage" role="status"></p>
+
+          <button class="primary-button auth-submit" id="authSubmitButton" type="submit">
+            <span>登录</span>
+          </button>
+        </form>
+      </div>
+    </section>
+
     <button class="mobile-nav-toggle" id="mobileNavToggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="打开菜单">
       <span class="ui-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></svg>
@@ -38,7 +79,10 @@
         </nav>
 
         <div class="category-section">
-          <div class="side-label">收藏板块</div>
+          <div class="category-section-head">
+            <div class="side-label">收藏板块</div>
+            <button class="category-manage-done" id="categoryManageDone" type="button" hidden>完成</button>
+          </div>
           <nav class="category-nav" id="categoryNav" aria-label="收藏板块"></nav>
           <form class="category-add-form" id="categoryAddForm">
             <input id="categoryNameInput" type="text" autocomplete="off" maxlength="12" placeholder="新增分类" />
@@ -49,6 +93,12 @@
               <span>新增分类</span>
             </button>
           </form>
+        </div>
+
+        <div class="account-panel">
+          <span>当前账号</span>
+          <strong id="accountName"></strong>
+          <button class="account-logout" id="logoutButton" type="button">退出登录</button>
         </div>
       </aside>
 
@@ -104,17 +154,14 @@
                   </span>
                   <span>整理收藏</span>
                 </button>
-                <button class="secondary-button" id="draftButton" type="button">
-                  <span class="ui-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="3" /></svg>
-                  </span>
-                  <span>预览归类</span>
-                </button>
               </div>
             </form>
           </section>
 
-          <section class="control-panel" aria-label="检索">
+        </div>
+
+        <div class="view-panel" id="collectionsView">
+          <section class="control-panel" id="searchPanel" aria-label="检索">
             <div class="search-row">
               <label class="search-box">
                 检索
@@ -138,42 +185,53 @@
 
             <div class="search-results" id="searchResults"></div>
           </section>
-        </div>
-
-        <div class="view-panel" id="collectionsView">
-          <section class="overview-panel" aria-label="统计">
-            <div class="stats-row" id="statsRow"></div>
-          </section>
 
           <section class="collection-board" aria-label="收藏列表">
             <div class="board-head">
-              <h2 id="boardTitle">全部收藏</h2>
-              <span id="boardCount"></span>
+              <div class="board-title">
+                <h2 id="boardTitle">全部收藏</h2>
+                <span id="boardCount"></span>
+              </div>
+              <div class="board-tools" aria-label="收藏查看方式">
+                <div class="view-mode-toggle" role="group" aria-label="查看方式">
+                  <button class="active" id="listModeButton" type="button">
+                    <span class="ui-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24"><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></svg>
+                    </span>
+                    <span>列表</span>
+                  </button>
+                  <button id="browseModeButton" type="button">
+                    <span class="ui-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24"><path d="M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" /><path d="M9 9h6" /><path d="M9 13h6" /></svg>
+                    </span>
+                    <span>浏览</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="browse-view" id="browseView" hidden>
+              <div class="browse-shell">
+                <button class="browse-nav" id="browsePrevButton" type="button" aria-label="上一条收藏">
+                  <span class="ui-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg>
+                  </span>
+                </button>
+                <div class="browse-card" id="browseCard"></div>
+                <button class="browse-nav" id="browseNextButton" type="button" aria-label="下一条收藏">
+                  <span class="ui-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
+                  </span>
+                </button>
+              </div>
+              <div class="browse-footer">
+                <span id="browseCounter"></span>
+              </div>
             </div>
             <div class="item-list" id="itemList"></div>
           </section>
         </div>
       </main>
     </div>
-
-    <dialog id="draftDialog">
-      <form method="dialog" class="dialog-body">
-        <div class="dialog-head">
-          <h2>整理预览</h2>
-          <button class="icon-text-button" value="cancel" aria-label="关闭" type="submit">
-            <span class="ui-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-            </span>
-            <span>关闭</span>
-          </button>
-        </div>
-        <div id="draftPreview" class="draft-preview"></div>
-        <menu>
-          <button class="secondary-button" value="cancel">取消</button>
-          <button class="primary-button" id="confirmDraftButton" value="default">加入收藏</button>
-        </menu>
-      </form>
-    </dialog>
 
     <script src="./app.js" defer></script>
   </body>

@@ -140,15 +140,34 @@ const seedItems = [
 let items = loadItems();
 let activeCategory = "全部收藏";
 let activeView = "home";
-let draftItem = null;
+let collectionMode = "list";
+let browseIndex = 0;
+let browseTouchStartX = null;
+let browseAnimationDirection = "";
+let browseIsAnimating = false;
+let categoryEditMode = false;
+let currentUser = null;
+let authMode = "login";
 
 const els = {
+  authScreen: document.querySelector("#authScreen"),
+  authForm: document.querySelector("#authForm"),
+  authUsername: document.querySelector("#authUsername"),
+  authPassword: document.querySelector("#authPassword"),
+  authMessage: document.querySelector("#authMessage"),
+  authSubmitButton: document.querySelector("#authSubmitButton"),
+  loginModeButton: document.querySelector("#loginModeButton"),
+  registerModeButton: document.querySelector("#registerModeButton"),
+  accountName: document.querySelector("#accountName"),
+  logoutButton: document.querySelector("#logoutButton"),
   mobileNavToggle: document.querySelector("#mobileNavToggle"),
   drawerScrim: document.querySelector("#drawerScrim"),
   homeViewButton: document.querySelector("#homeViewButton"),
   homeView: document.querySelector("#homeView"),
   collectionsView: document.querySelector("#collectionsView"),
+  searchPanel: document.querySelector("#searchPanel"),
   categoryNav: document.querySelector("#categoryNav"),
+  categoryManageDone: document.querySelector("#categoryManageDone"),
   categoryAddForm: document.querySelector("#categoryAddForm"),
   categoryNameInput: document.querySelector("#categoryNameInput"),
   categoryInput: document.querySelector("#categoryInput"),
@@ -156,19 +175,21 @@ const els = {
   sourceInput: document.querySelector("#sourceInput"),
   captureForm: document.querySelector("#captureForm"),
   pasteButton: document.querySelector("#pasteButton"),
-  draftButton: document.querySelector("#draftButton"),
   submitButton: document.querySelector("#submitButton"),
   searchInput: document.querySelector("#searchInput"),
   categoryFilter: document.querySelector("#categoryFilter"),
   statusFilter: document.querySelector("#statusFilter"),
-  statsRow: document.querySelector("#statsRow"),
   searchResults: document.querySelector("#searchResults"),
   boardTitle: document.querySelector("#boardTitle"),
   boardCount: document.querySelector("#boardCount"),
+  listModeButton: document.querySelector("#listModeButton"),
+  browseModeButton: document.querySelector("#browseModeButton"),
+  browseView: document.querySelector("#browseView"),
+  browseCard: document.querySelector("#browseCard"),
+  browseCounter: document.querySelector("#browseCounter"),
+  browsePrevButton: document.querySelector("#browsePrevButton"),
+  browseNextButton: document.querySelector("#browseNextButton"),
   itemList: document.querySelector("#itemList"),
-  draftDialog: document.querySelector("#draftDialog"),
-  draftPreview: document.querySelector("#draftPreview"),
-  confirmDraftButton: document.querySelector("#confirmDraftButton"),
   analysisMode: document.querySelector("#analysisMode"),
 };
 
@@ -177,16 +198,34 @@ init();
 function init() {
   render();
   bindEvents();
+  checkSession();
 }
 
 function bindEvents() {
   lockPageZoom();
 
+  els.authForm.addEventListener("submit", submitAuthForm);
+  els.loginModeButton.addEventListener("click", () => setAuthMode("login"));
+  els.registerModeButton.addEventListener("click", () => setAuthMode("register"));
+  els.logoutButton.addEventListener("click", logout);
+
   els.mobileNavToggle.addEventListener("click", () => toggleMobileDrawer());
   els.drawerScrim.addEventListener("click", closeMobileDrawer);
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeMobileDrawer();
+    if (event.key === "Escape") {
+      closeMobileDrawer();
+      return;
+    }
+    if (collectionMode !== "browse" || activeView !== "collections" || isEditingTarget(event.target)) return;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      stepBrowse(-1);
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      stepBrowse(1);
+    }
   });
 
   els.homeViewButton.addEventListener("click", () => {
@@ -204,24 +243,6 @@ function bindEvents() {
     });
   });
 
-  els.draftButton.addEventListener("click", async () => {
-    await withBusy("正在读取链接内容...", async () => {
-      draftItem = await buildItemFromForm({ remote: true });
-      if (!draftItem) return;
-      renderDraft(draftItem);
-      els.draftDialog.showModal();
-    });
-  });
-
-  els.confirmDraftButton.addEventListener("click", (event) => {
-    event.preventDefault();
-    if (!draftItem) return;
-    addItem(draftItem);
-    draftItem = null;
-    els.captureForm.reset();
-    els.draftDialog.close();
-  });
-
   els.pasteButton.addEventListener("click", async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -236,11 +257,120 @@ function bindEvents() {
     event.preventDefault();
     addCustomCategory(els.categoryNameInput.value);
   });
+  els.categoryManageDone.addEventListener("click", () => {
+    categoryEditMode = false;
+    renderCategories();
+  });
+
+  els.listModeButton.addEventListener("click", () => setCollectionMode("list"));
+  els.browseModeButton.addEventListener("click", () => setCollectionMode("browse"));
+  els.browsePrevButton.addEventListener("click", () => stepBrowse(-1));
+  els.browseNextButton.addEventListener("click", () => stepBrowse(1));
+  els.browseView.addEventListener("touchstart", (event) => {
+    if (event.touches.length !== 1) return;
+    browseTouchStartX = event.touches[0].clientX;
+  }, { passive: true });
+  els.browseView.addEventListener("touchend", (event) => {
+    if (browseTouchStartX === null || !event.changedTouches.length) return;
+    const deltaX = event.changedTouches[0].clientX - browseTouchStartX;
+    browseTouchStartX = null;
+    if (Math.abs(deltaX) < 48) return;
+    stepBrowse(deltaX < 0 ? 1 : -1);
+  }, { passive: true });
 
   [els.searchInput, els.categoryFilter, els.statusFilter].forEach((node) => {
     node.addEventListener("input", renderSearchResults);
     node.addEventListener("change", renderSearchResults);
   });
+}
+
+async function checkSession() {
+  try {
+    const response = await fetch("/api/session");
+    const payload = await response.json();
+    if (payload.user) {
+      setAuthenticated(payload.user);
+      return;
+    }
+  } catch {
+    setAuthMessage("请先登录；如果页面刚更新，请重启本地服务。", true);
+  }
+  showAuthScreen();
+}
+
+async function submitAuthForm(event) {
+  event.preventDefault();
+  const username = els.authUsername.value.trim();
+  const password = els.authPassword.value;
+
+  if (!username || !password) {
+    setAuthMessage("请输入账号和密码。", true);
+    return;
+  }
+
+  els.authSubmitButton.disabled = true;
+  setAuthMessage(authMode === "login" ? "正在登录..." : "正在注册...");
+
+  try {
+    const response = await fetch(authMode === "login" ? "/api/login" : "/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) {
+      setAuthMessage(payload.reason || "账号处理失败。", true);
+      return;
+    }
+    els.authPassword.value = "";
+    setAuthenticated(payload.user);
+  } catch {
+    setAuthMessage("无法连接登录服务，请确认本地服务已启动。", true);
+  } finally {
+    els.authSubmitButton.disabled = false;
+  }
+}
+
+async function logout() {
+  els.logoutButton.disabled = true;
+  try {
+    await fetch("/api/logout", { method: "POST" });
+  } finally {
+    els.logoutButton.disabled = false;
+    showAuthScreen();
+    closeMobileDrawer();
+  }
+}
+
+function setAuthenticated(user) {
+  currentUser = user;
+  document.body.classList.remove("auth-required");
+  els.authScreen.setAttribute("hidden", "");
+  els.accountName.textContent = currentUser.username;
+  setAuthMessage("");
+}
+
+function showAuthScreen() {
+  currentUser = null;
+  document.body.classList.add("auth-required");
+  els.authScreen.removeAttribute("hidden");
+  els.accountName.textContent = "";
+  els.authUsername.focus();
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const isLogin = authMode === "login";
+  els.loginModeButton.classList.toggle("active", isLogin);
+  els.registerModeButton.classList.toggle("active", !isLogin);
+  els.authSubmitButton.textContent = isLogin ? "登录" : "创建账号";
+  els.authPassword.autocomplete = isLogin ? "current-password" : "new-password";
+  setAuthMessage("");
+}
+
+function setAuthMessage(message, isError = false) {
+  els.authMessage.textContent = message;
+  els.authMessage.classList.toggle("error", Boolean(isError));
 }
 
 function lockPageZoom() {
@@ -291,7 +421,6 @@ function render() {
   renderCategoryOptions();
   renderView();
   renderCategories();
-  renderStats();
   renderSearchResults();
   renderItems();
 }
@@ -300,10 +429,12 @@ function renderView() {
   els.homeView.classList.toggle("active", activeView === "home");
   els.collectionsView.classList.toggle("active", activeView === "collections");
   els.homeViewButton.classList.toggle("active", activeView === "home");
+  els.searchPanel.hidden = activeView !== "collections" || activeCategory !== "全部收藏";
 }
 
 function renderCategories() {
   els.categoryNav.innerHTML = "";
+  els.categoryManageDone.hidden = !categoryEditMode;
   const categories = getCategories();
   const counts = categories.reduce((acc, category) => {
     acc[category.name] =
@@ -316,7 +447,11 @@ function renderCategories() {
   categories.forEach((category) => {
     const canRemove = canRemoveCategory(category.name);
     const wrapper = document.createElement("div");
-    wrapper.className = `category-item${canRemove ? " removable" : ""}`;
+    wrapper.className = [
+      "category-item",
+      canRemove ? "removable" : "",
+      categoryEditMode ? "is-editing" : "",
+    ].filter(Boolean).join(" ");
 
     const button = document.createElement("button");
     button.className = `category-button${activeView === "collections" && activeCategory === category.name ? " active" : ""}`;
@@ -327,33 +462,33 @@ function renderCategories() {
       <span class="category-count">${counts[category.name] ?? 0}</span>
     `;
     button.addEventListener("click", () => {
+      if (categoryEditMode) return;
       activeCategory = category.name;
+      browseIndex = 0;
       setActiveView("collections");
       closeMobileDrawer();
     });
     wrapper.append(button);
 
     if (canRemove) {
-      wrapper.title = "右键或长按删除分类";
+      wrapper.title = categoryEditMode ? "点击删除按钮删除分类" : "右键删除，长按进入编辑模式";
       bindCategoryDeleteGestures(wrapper, category.name);
+      if (categoryEditMode) {
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "category-delete-button";
+        deleteButton.type = "button";
+        deleteButton.setAttribute("aria-label", `删除分类 ${category.name}`);
+        deleteButton.innerHTML = iconMarkup("trash");
+        deleteButton.addEventListener("click", (event) => {
+          event.stopPropagation();
+          removeCategory(category.name);
+        });
+        wrapper.append(deleteButton);
+      }
     }
 
     els.categoryNav.append(wrapper);
   });
-}
-
-function renderStats() {
-  const todoCount = items.filter((item) => item.status !== "已完成").length;
-  const resolvedCount = items.filter((item) => item.analysisStatus === "已解析").length;
-  const stats = [
-    ["总收藏", items.length],
-    ["未完成", todoCount],
-    ["读到正文", resolvedCount],
-  ];
-
-  els.statsRow.innerHTML = stats
-    .map(([label, value]) => `<div class="stat"><strong>${value}</strong><span>${label}</span></div>`)
-    .join("");
 }
 
 function renderSearchResults() {
@@ -399,87 +534,137 @@ function renderItems() {
   const filtered = getCollectionItems();
   els.boardTitle.textContent = activeCategory;
   els.boardCount.textContent = `${filtered.length} 条`;
+  renderCollectionModeControls(filtered.length);
 
   if (!filtered.length) {
+    els.browseView.hidden = true;
+    els.itemList.hidden = false;
+    els.browseCard.innerHTML = "";
+    els.browseCounter.textContent = "";
     els.itemList.innerHTML = `<div class="empty-state">没有匹配的收藏</div>`;
     return;
   }
 
+  browseIndex = Math.min(Math.max(browseIndex, 0), filtered.length - 1);
+
+  if (collectionMode === "browse") {
+    renderBrowseItem(filtered);
+    return;
+  }
+
+  els.itemList.hidden = false;
+  els.browseView.hidden = true;
+  els.browseCard.innerHTML = "";
+  els.browseCounter.textContent = "";
   els.itemList.innerHTML = "";
   filtered.forEach((item) => {
     const card = document.createElement("article");
     card.className = "item-card";
     card.innerHTML = itemCardTemplate(item);
+    bindItemCard(card, item);
+    els.itemList.append(card);
+  });
+}
 
-    card.querySelector(".status-select").addEventListener("change", (event) => {
-      updateItem(item.id, { status: event.target.value });
-    });
+function renderBrowseItem(filtered) {
+  const item = filtered[browseIndex];
+  els.itemList.hidden = true;
+  els.browseView.hidden = false;
+  els.browseCounter.textContent = `${browseIndex + 1} / ${filtered.length}`;
+  els.browseCard.innerHTML = "";
 
-    card.querySelector(".analysis-title-input").addEventListener("change", (event) => {
-      const title = normalizeText(event.target.value);
-      updateItem(item.id, { title: title || item.title, analysisStatus: "已手动修改" });
-    });
+  const card = document.createElement("article");
+  card.className = [
+    "item-card",
+    "browse-item-card",
+    browseAnimationDirection ? `page-enter-${browseAnimationDirection}` : "",
+  ].filter(Boolean).join(" ");
+  card.innerHTML = itemCardTemplate(item);
+  card.addEventListener("animationend", () => {
+    card.classList.remove("page-enter-next", "page-enter-prev");
+  }, { once: true });
+  bindItemCard(card, item);
+  els.browseCard.append(card);
+}
 
-    card.querySelector(".analysis-platform-input").addEventListener("change", (event) => {
-      const platform = normalizeText(event.target.value);
-      updateItem(item.id, { platform: platform || item.platform, analysisStatus: "已手动修改" });
-    });
+function renderCollectionModeControls(count) {
+  els.listModeButton.classList.toggle("active", collectionMode === "list");
+  els.browseModeButton.classList.toggle("active", collectionMode === "browse");
+  els.listModeButton.setAttribute("aria-pressed", String(collectionMode === "list"));
+  els.browseModeButton.setAttribute("aria-pressed", String(collectionMode === "browse"));
+  els.browsePrevButton.disabled = count < 2;
+  els.browseNextButton.disabled = count < 2;
+}
 
-    card.querySelector(".analysis-category-select").addEventListener("change", (event) => {
-      updateItem(item.id, { category: event.target.value, analysisStatus: "已手动修改" });
-    });
+function bindItemCard(card, item) {
+  card.querySelector(".status-select").addEventListener("change", (event) => {
+    updateItem(item.id, { status: event.target.value });
+  });
 
-    card.querySelector(".tag-add-form").addEventListener("submit", (event) => {
+  card.querySelector(".analysis-title-input").addEventListener("change", (event) => {
+    const title = normalizeText(event.target.value);
+    updateItem(item.id, { title: title || item.title, analysisStatus: "已手动修改" });
+  });
+
+  card.querySelector(".analysis-platform-input").addEventListener("change", (event) => {
+    const platform = normalizeText(event.target.value);
+    updateItem(item.id, { platform: platform || item.platform, analysisStatus: "已手动修改" });
+  });
+
+  card.querySelector(".analysis-category-select").addEventListener("change", (event) => {
+    updateItem(item.id, { category: event.target.value, analysisStatus: "已手动修改" });
+  });
+
+  card.querySelector(".tag-add-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const input = event.currentTarget.querySelector(".tag-input");
+    const tag = input.value.trim();
+    if (!tag) return;
+    addItemTag(item.id, tag);
+  });
+
+  const tagEditor = card.querySelector(".tag-editor");
+  const tagInput = tagEditor.querySelector(".tag-input");
+  tagEditor.querySelector(".tag-add-toggle").addEventListener("click", () => {
+    tagEditor.classList.add("is-adding");
+    tagInput.focus();
+  });
+  tagEditor.querySelector(".tag-cancel-button").addEventListener("click", () => {
+    tagInput.value = "";
+    tagEditor.classList.remove("is-adding");
+  });
+  tagInput.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
       event.preventDefault();
-      const input = event.currentTarget.querySelector(".tag-input");
-      const tag = input.value.trim();
-      if (!tag) return;
-      addItemTag(item.id, tag);
-    });
-
-    const tagEditor = card.querySelector(".tag-editor");
-    const tagInput = tagEditor.querySelector(".tag-input");
-    tagEditor.querySelector(".tag-add-toggle").addEventListener("click", () => {
-      tagEditor.classList.add("is-adding");
-      tagInput.focus();
-    });
-    tagEditor.querySelector(".tag-cancel-button").addEventListener("click", () => {
       tagInput.value = "";
       tagEditor.classList.remove("is-adding");
-    });
-    tagInput.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        tagInput.value = "";
-        tagEditor.classList.remove("is-adding");
-      }
-    });
-
-    card.querySelectorAll(".tag-chip").forEach((chip) => {
-      bindTagDeleteGestures(chip, item.id);
-    });
-
-    const reanalyzeButton = card.querySelector(".reanalyze-button");
-    if (reanalyzeButton) {
-      reanalyzeButton.addEventListener("click", () => reanalyzeItem(item.id));
     }
+  });
 
-    card.querySelector(".delete-button").addEventListener("click", () => {
-      items = items.filter((candidate) => candidate.id !== item.id);
-      saveItems();
-      render();
+  card.querySelectorAll(".tag-chip").forEach((chip) => {
+    bindTagDeleteGestures(chip, item.id);
+  });
+
+  const reanalyzeButton = card.querySelector(".reanalyze-button");
+  if (reanalyzeButton) {
+    reanalyzeButton.addEventListener("click", () => reanalyzeItem(item.id));
+  }
+
+  card.querySelector(".delete-button").addEventListener("click", () => {
+    items = items.filter((candidate) => candidate.id !== item.id);
+    saveItems();
+    render();
+  });
+
+  card.querySelectorAll(".tag-search").forEach((tag) => {
+    tag.addEventListener("click", () => {
+      els.searchInput.value = tag.dataset.tag || tag.textContent;
+      els.categoryFilter.value = "全部收藏";
+      activeCategory = "全部收藏";
+      browseIndex = 0;
+      setActiveView("collections");
+      renderSearchResults();
     });
-
-    card.querySelectorAll(".tag-search").forEach((tag) => {
-      tag.addEventListener("click", () => {
-        els.searchInput.value = tag.dataset.tag || tag.textContent;
-        els.categoryFilter.value = "全部收藏";
-        setActiveView("home");
-        renderSearchResults();
-      });
-    });
-
-    els.itemList.append(card);
   });
 }
 
@@ -647,7 +832,8 @@ function bindCategoryDeleteGestures(categoryItem, categoryName) {
     longPressTriggered = false;
     longPressTimer = window.setTimeout(() => {
       longPressTriggered = true;
-      removeCategory(categoryName);
+      categoryEditMode = true;
+      renderCategories();
     }, 620);
   }, { passive: true });
 
@@ -662,26 +848,6 @@ function bindCategoryDeleteGestures(categoryItem, categoryName) {
       }
     }, { passive: false });
   });
-}
-
-function renderDraft(item) {
-  const rows = [
-    ["标题", item.title],
-    ["板块", item.category],
-    ["来源", `${item.platform} · ${item.analysisSource}`],
-    ["状态", item.status],
-    ["标签", item.tags.join("、")],
-  ];
-  els.draftPreview.innerHTML = rows
-    .map(
-      ([label, value]) => `
-      <div class="draft-row">
-        <span>${label}</span>
-        <span>${escapeHtml(value)}</span>
-      </div>
-    `,
-    )
-    .join("");
 }
 
 function getCollectionItems() {
@@ -916,6 +1082,7 @@ function addItem(item) {
   items = [item, ...items];
   saveItems();
   activeCategory = item.category;
+  browseIndex = 0;
   setActiveView("collections");
 }
 
@@ -973,6 +1140,38 @@ function removeItemTag(id, tag) {
   render();
 }
 
+function setCollectionMode(mode) {
+  collectionMode = mode === "browse" ? "browse" : "list";
+  browseIndex = 0;
+  browseAnimationDirection = "";
+  browseIsAnimating = false;
+  renderItems();
+}
+
+function stepBrowse(direction) {
+  const filtered = getCollectionItems();
+  if (collectionMode !== "browse" || filtered.length < 2 || browseIsAnimating) return;
+
+  const directionName = direction > 0 ? "next" : "prev";
+  const currentCard = els.browseCard.querySelector(".browse-item-card");
+  browseIsAnimating = true;
+
+  if (currentCard) {
+    currentCard.classList.add(`page-exit-${directionName}`);
+  }
+
+  window.setTimeout(() => {
+    browseIndex = (browseIndex + direction + filtered.length) % filtered.length;
+    browseAnimationDirection = directionName;
+    renderItems();
+
+    window.setTimeout(() => {
+      browseAnimationDirection = "";
+      browseIsAnimating = false;
+    }, 360);
+  }, currentCard ? 170 : 0);
+}
+
 function setActiveView(view) {
   activeView = view;
   render();
@@ -990,16 +1189,18 @@ function closeMobileDrawer() {
   toggleMobileDrawer(false);
 }
 
+function isEditingTarget(target) {
+  return ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName) || target?.isContentEditable;
+}
+
 async function withBusy(message, task) {
   els.submitButton.disabled = true;
-  els.draftButton.disabled = true;
   const previous = els.analysisMode.textContent;
   els.analysisMode.textContent = message;
   try {
     await task();
   } finally {
     els.submitButton.disabled = false;
-    els.draftButton.disabled = false;
     els.analysisMode.textContent = previous;
   }
 }
@@ -1116,6 +1317,7 @@ function removeCategory(categoryName) {
   ));
   if (activeCategory === normalizedCategoryName) {
     activeCategory = "全部收藏";
+    browseIndex = 0;
   }
   saveCustomCategories();
   saveHiddenBaseCategories();
