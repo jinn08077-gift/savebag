@@ -6,48 +6,7 @@
     <title>Saved baggg</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body class="auth-required">
-    <section class="auth-screen" id="authScreen" aria-label="登录注册">
-      <div class="auth-card">
-        <div class="auth-brand">
-          <div class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="M6.5 8.5h11l-.8 10.2a2 2 0 0 1-2 1.8H9.3a2 2 0 0 1-2-1.8L6.5 8.5Z" />
-              <path d="M9 8.5V7a3 3 0 0 1 6 0v1.5" />
-              <path d="M10 13h4" />
-            </svg>
-          </div>
-          <div>
-            <h1>Saved baggg</h1>
-            <p>登录后进入你的收藏空间</p>
-          </div>
-        </div>
-
-        <form class="auth-form" id="authForm">
-          <div class="auth-mode" role="tablist" aria-label="账号模式">
-            <button class="active" id="loginModeButton" type="button">登录</button>
-            <button id="registerModeButton" type="button">注册</button>
-          </div>
-
-          <label>
-            账号
-            <input id="authUsername" type="text" autocomplete="username" maxlength="40" placeholder="输入账号" required />
-          </label>
-
-          <label>
-            密码
-            <input id="authPassword" type="password" autocomplete="current-password" minlength="6" placeholder="至少 6 位" required />
-          </label>
-
-          <p class="auth-message" id="authMessage" role="status"></p>
-
-          <button class="primary-button auth-submit" id="authSubmitButton" type="submit">
-            <span>登录</span>
-          </button>
-        </form>
-      </div>
-    </section>
-
+  <body>
     <button class="mobile-nav-toggle" id="mobileNavToggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="打开菜单">
       <span class="ui-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></svg>
@@ -95,11 +54,6 @@
           </form>
         </div>
 
-        <div class="account-panel">
-          <span>当前账号</span>
-          <strong id="accountName"></strong>
-          <button class="account-logout" id="logoutButton" type="button">退出登录</button>
-        </div>
       </aside>
 
       <main class="workspace">

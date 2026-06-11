@@ -146,20 +146,8 @@ let browseTouchStartX = null;
 let browseAnimationDirection = "";
 let browseIsAnimating = false;
 let categoryEditMode = false;
-let currentUser = null;
-let authMode = "login";
 
 const els = {
-  authScreen: document.querySelector("#authScreen"),
-  authForm: document.querySelector("#authForm"),
-  authUsername: document.querySelector("#authUsername"),
-  authPassword: document.querySelector("#authPassword"),
-  authMessage: document.querySelector("#authMessage"),
-  authSubmitButton: document.querySelector("#authSubmitButton"),
-  loginModeButton: document.querySelector("#loginModeButton"),
-  registerModeButton: document.querySelector("#registerModeButton"),
-  accountName: document.querySelector("#accountName"),
-  logoutButton: document.querySelector("#logoutButton"),
   mobileNavToggle: document.querySelector("#mobileNavToggle"),
   drawerScrim: document.querySelector("#drawerScrim"),
   homeViewButton: document.querySelector("#homeViewButton"),
@@ -198,16 +186,10 @@ init();
 function init() {
   render();
   bindEvents();
-  checkSession();
 }
 
 function bindEvents() {
   lockPageZoom();
-
-  els.authForm.addEventListener("submit", submitAuthForm);
-  els.loginModeButton.addEventListener("click", () => setAuthMode("login"));
-  els.registerModeButton.addEventListener("click", () => setAuthMode("register"));
-  els.logoutButton.addEventListener("click", logout);
 
   els.mobileNavToggle.addEventListener("click", () => toggleMobileDrawer());
   els.drawerScrim.addEventListener("click", closeMobileDrawer);
@@ -282,95 +264,6 @@ function bindEvents() {
     node.addEventListener("input", renderSearchResults);
     node.addEventListener("change", renderSearchResults);
   });
-}
-
-async function checkSession() {
-  try {
-    const response = await fetch("/api/session");
-    const payload = await response.json();
-    if (payload.user) {
-      setAuthenticated(payload.user);
-      return;
-    }
-  } catch {
-    setAuthMessage("请先登录；如果页面刚更新，请重启本地服务。", true);
-  }
-  showAuthScreen();
-}
-
-async function submitAuthForm(event) {
-  event.preventDefault();
-  const username = els.authUsername.value.trim();
-  const password = els.authPassword.value;
-
-  if (!username || !password) {
-    setAuthMessage("请输入账号和密码。", true);
-    return;
-  }
-
-  els.authSubmitButton.disabled = true;
-  setAuthMessage(authMode === "login" ? "正在登录..." : "正在注册...");
-
-  try {
-    const response = await fetch(authMode === "login" ? "/api/login" : "/api/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    const payload = await response.json();
-    if (!response.ok || !payload.ok) {
-      setAuthMessage(payload.reason || "账号处理失败。", true);
-      return;
-    }
-    els.authPassword.value = "";
-    setAuthenticated(payload.user);
-  } catch {
-    setAuthMessage("无法连接登录服务，请确认本地服务已启动。", true);
-  } finally {
-    els.authSubmitButton.disabled = false;
-  }
-}
-
-async function logout() {
-  els.logoutButton.disabled = true;
-  try {
-    await fetch("/api/logout", { method: "POST" });
-  } finally {
-    els.logoutButton.disabled = false;
-    showAuthScreen();
-    closeMobileDrawer();
-  }
-}
-
-function setAuthenticated(user) {
-  currentUser = user;
-  document.body.classList.remove("auth-required");
-  els.authScreen.setAttribute("hidden", "");
-  els.accountName.textContent = currentUser.username;
-  setAuthMessage("");
-}
-
-function showAuthScreen() {
-  currentUser = null;
-  document.body.classList.add("auth-required");
-  els.authScreen.removeAttribute("hidden");
-  els.accountName.textContent = "";
-  els.authUsername.focus();
-}
-
-function setAuthMode(mode) {
-  authMode = mode;
-  const isLogin = authMode === "login";
-  els.loginModeButton.classList.toggle("active", isLogin);
-  els.registerModeButton.classList.toggle("active", !isLogin);
-  els.authSubmitButton.textContent = isLogin ? "登录" : "创建账号";
-  els.authPassword.autocomplete = isLogin ? "current-password" : "new-password";
-  setAuthMessage("");
-}
-
-function setAuthMessage(message, isError = false) {
-  els.authMessage.textContent = message;
-  els.authMessage.classList.toggle("error", Boolean(isError));
 }
 
 function lockPageZoom() {
