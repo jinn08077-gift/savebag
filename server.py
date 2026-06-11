@@ -411,7 +411,45 @@ def dedupe_chunks(chunks):
     return clean_text(" ".join(cleaned))[:12000]
 
 
+def lan_addresses():
+    addresses = set()
+    lan_networks = [
+        ipaddress.ip_network("10.0.0.0/8"),
+        ipaddress.ip_network("172.16.0.0/12"),
+        ipaddress.ip_network("192.168.0.0/16"),
+    ]
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("8.8.8.8", 80))
+            addresses.add(probe.getsockname()[0])
+    except OSError:
+        pass
+
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            addresses.add(info[4][0])
+    except socket.gaierror:
+        pass
+
+    visible_addresses = []
+    for address in addresses:
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError:
+            continue
+        if ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+            continue
+        if not any(ip in network for network in lan_networks):
+            continue
+        visible_addresses.append(address)
+    return sorted(visible_addresses)
+
+
 if __name__ == "__main__":
-    server = ThreadingHTTPServer(("localhost", 8000), Handler)
-    print("Saved baggg 运行在 http://localhost:8000/")
+    port = 8000
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    print("Saved baggg 运行在：")
+    print(f"  电脑：http://localhost:{port}/")
+    for address in lan_addresses():
+        print(f"  手机：http://{address}:{port}/")
     server.serve_forever()
