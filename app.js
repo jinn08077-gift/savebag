@@ -1,6 +1,7 @@
 const STORAGE_KEY = "shicang.items.v1";
 const CATEGORY_STORAGE_KEY = "shicang.customCategories.v1";
 const HIDDEN_CATEGORY_STORAGE_KEY = "shicang.hiddenBaseCategories.v1";
+const STATE_ENDPOINT = "/api/state";
 
 const baseCategories = [
   { name: "全部收藏", color: "#202426" },
@@ -146,6 +147,8 @@ let browseTouchStartX = null;
 let browseAnimationDirection = "";
 let browseIsAnimating = false;
 let categoryEditMode = false;
+let serverStorageAvailable = false;
+let saveStateTimer = null;
 
 const els = {
   mobileNavToggle: document.querySelector("#mobileNavToggle"),
@@ -186,6 +189,7 @@ init();
 function init() {
   render();
   bindEvents();
+  loadServerState();
 }
 
 function bindEvents() {
@@ -1098,6 +1102,146 @@ async function withBusy(message, task) {
   }
 }
 
+async function loadServerState() {
+  try {
+    const response = await fetch(STATE_ENDPOINT);
+    if (!response.ok) throw new Error("state unavailable");
+    const payload = await response.json();
+    serverStorageAvailable = true;
+
+    if (payload.hasState && payload.state) {
+      const localBackup = loadLocalBackupState();
+      const state = localBackup ? mergeAppStates(payload.state, localBackup) : payload.state;
+      applyAppState(state);
+      if (localBackup) {
+        await saveAppStateNow();
+      } else {
+        saveLocalBackup();
+      }
+      render();
+      return;
+    }
+
+    const localBackup = loadLocalBackupState();
+    if (localBackup) {
+      applyAppState(localBackup);
+      await saveAppStateNow();
+      render();
+    }
+  } catch {
+    serverStorageAvailable = false;
+  }
+}
+
+function getAppState() {
+  return {
+    version: 1,
+    items,
+    customCategories,
+    hiddenBaseCategories,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function applyAppState(state) {
+  customCategories = normalizeCustomCategories(state?.customCategories || []);
+  hiddenBaseCategories = normalizeHiddenBaseCategories(state?.hiddenBaseCategories || []);
+  items = Array.isArray(state?.items)
+    ? state.items.map(migrateItem).filter(Boolean)
+    : structuredClone(seedItems);
+
+  const categoryNames = new Set(getCategories().map((category) => category.name));
+  if (!categoryNames.has(activeCategory)) {
+    activeCategory = "全部收藏";
+    browseIndex = 0;
+  }
+}
+
+function saveAppState() {
+  saveLocalBackup();
+  window.clearTimeout(saveStateTimer);
+  saveStateTimer = window.setTimeout(() => {
+    saveAppStateNow();
+  }, 250);
+}
+
+async function saveAppStateNow() {
+  saveLocalBackup();
+  try {
+    const response = await fetch(STATE_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state: getAppState() }),
+    });
+    serverStorageAvailable = response.ok;
+  } catch {
+    serverStorageAvailable = false;
+  }
+}
+
+function saveLocalBackup() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(customCategories));
+  localStorage.setItem(HIDDEN_CATEGORY_STORAGE_KEY, JSON.stringify(hiddenBaseCategories));
+}
+
+function loadLocalBackupState() {
+  const savedItems = localStorage.getItem(STORAGE_KEY);
+  const savedCategories = localStorage.getItem(CATEGORY_STORAGE_KEY);
+  const savedHiddenCategories = localStorage.getItem(HIDDEN_CATEGORY_STORAGE_KEY);
+  if (!savedItems && !savedCategories && !savedHiddenCategories) return null;
+
+  return {
+    version: 1,
+    items: parseLocalArray(savedItems),
+    customCategories: parseLocalArray(savedCategories),
+    hiddenBaseCategories: parseLocalArray(savedHiddenCategories),
+    updatedAt: "",
+  };
+}
+
+function parseLocalArray(value) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function mergeAppStates(serverState, localState) {
+  const mergedItems = [];
+  const seenItemKeys = new Set();
+  [...(serverState?.items || []), ...(localState?.items || [])].forEach((item) => {
+    if (!item || typeof item !== "object") return;
+    const key = itemIdentity(item);
+    if (seenItemKeys.has(key)) return;
+    seenItemKeys.add(key);
+    mergedItems.push(item);
+  });
+
+  return {
+    version: 1,
+    items: mergedItems,
+    customCategories: normalizeCustomCategories([
+      ...(serverState?.customCategories || []),
+      ...(localState?.customCategories || []),
+    ]),
+    hiddenBaseCategories: normalizeHiddenBaseCategories([
+      ...(serverState?.hiddenBaseCategories || []),
+      ...(localState?.hiddenBaseCategories || []),
+    ]),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function itemIdentity(item) {
+  const contentKey = normalizeText(item.url || item.raw || "");
+  const titleKey = normalizeText(item.title || "");
+  return (contentKey || titleKey ? `${contentKey}|${titleKey}` : item.id || "").toLowerCase();
+}
+
 function loadItems() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return structuredClone(seedItems);
@@ -1126,7 +1270,7 @@ function migrateItem(item) {
 }
 
 function saveItems() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  saveAppState();
 }
 
 function getCategories() {
@@ -1230,7 +1374,7 @@ function loadCustomCategories() {
 }
 
 function saveCustomCategories() {
-  localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(customCategories));
+  saveAppState();
 }
 
 function loadHiddenBaseCategories() {
@@ -1245,7 +1389,7 @@ function loadHiddenBaseCategories() {
 }
 
 function saveHiddenBaseCategories() {
-  localStorage.setItem(HIDDEN_CATEGORY_STORAGE_KEY, JSON.stringify(hiddenBaseCategories));
+  saveAppState();
 }
 
 function normalizeCustomCategories(values) {

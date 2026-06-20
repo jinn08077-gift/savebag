@@ -7,12 +7,16 @@ import ipaddress
 import json
 import mimetypes
 import socket
+import sqlite3
 import urllib.error
 import urllib.request
 
 
 ROOT = Path(__file__).resolve().parent
 MAX_BYTES = 2_000_000
+DATA_DIR = ROOT / ".savedbag_data"
+DB_FILE = DATA_DIR / "savedbag.sqlite3"
+LEGACY_STATE_FILE = DATA_DIR / "state.json"
 
 
 class PageTextParser(HTMLParser):
@@ -85,6 +89,9 @@ class PageTextParser(HTMLParser):
 class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         parsed_path = urlparse(self.path).path
+        if parsed_path == "/api/state":
+            self.handle_save_state()
+            return
         if parsed_path != "/api/analyze":
             self.send_json({"ok": False, "reason": "未知接口"}, status=404)
             return
@@ -99,6 +106,14 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed_path = urlparse(self.path).path
+        if parsed_path == "/api/state":
+            self.handle_get_state()
+            return
+
+        if parsed_path.startswith("/.savedbag_data"):
+            self.send_error(404)
+            return
+
         if parsed_path == "/":
             parsed_path = "/index.html"
 
@@ -126,6 +141,101 @@ class Handler(SimpleHTTPRequestHandler):
     def read_json_body(self):
         length = int(self.headers.get("Content-Length", "0"))
         return json.loads(self.rfile.read(length) or b"{}")
+
+    def handle_get_state(self):
+        state = load_state()
+        self.send_json({"ok": True, "hasState": state is not None, "state": state})
+
+    def handle_save_state(self):
+        try:
+            payload = self.read_json_body()
+            state = normalize_state_payload(payload.get("state", payload))
+            save_state(state)
+            self.send_json({"ok": True})
+        except Exception as exc:
+            self.send_json({"ok": False, "reason": f"保存失败：{exc}"}, status=500)
+
+
+def load_state():
+    db = open_database()
+    try:
+        row = db.execute("SELECT state_json FROM app_state WHERE id = 1").fetchone()
+        if row:
+            try:
+                return normalize_state_payload(json.loads(row["state_json"]))
+            except json.JSONDecodeError:
+                return None
+    finally:
+        db.close()
+
+    legacy_state = load_legacy_state()
+    if legacy_state is not None:
+        save_state(legacy_state)
+    return legacy_state
+
+
+def save_state(state):
+    state = normalize_state_payload(state)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    db = open_database()
+    try:
+        db.execute(
+            """
+            INSERT INTO app_state (id, state_json, updated_at)
+            VALUES (1, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              state_json = excluded.state_json,
+              updated_at = excluded.updated_at
+            """,
+            (
+                json.dumps(state, ensure_ascii=False),
+                state.get("updatedAt", ""),
+            ),
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
+def open_database():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(DB_FILE)
+    db.row_factory = sqlite3.Row
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS app_state (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          state_json TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+        """
+    )
+    db.commit()
+    return db
+
+
+def load_legacy_state():
+    if not LEGACY_STATE_FILE.exists():
+        return None
+    try:
+        data = json.loads(LEGACY_STATE_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return normalize_state_payload(data)
+
+
+def normalize_state_payload(value):
+    if not isinstance(value, dict):
+        value = {}
+    return {
+        "version": 1,
+        "items": value.get("items") if isinstance(value.get("items"), list) else [],
+        "customCategories": value.get("customCategories") if isinstance(value.get("customCategories"), list) else [],
+        "hiddenBaseCategories": value.get("hiddenBaseCategories")
+        if isinstance(value.get("hiddenBaseCategories"), list)
+        else [],
+        "updatedAt": value.get("updatedAt") or "",
+    }
 
 
 def analyze_url(url):
